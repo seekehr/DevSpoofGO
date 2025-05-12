@@ -1,0 +1,3 @@
+[submodule "dll/detours"]
+	path = dll/detours
+	url = https://github.com/microsoft/Detours
