@@ -124,7 +124,7 @@ func GenerateRandomValues() RandomGeneratedValues {
 	values.DiskSerial = strings.Join(diskSerialParts, "_") + "."
 
 	// Generates a random string mimicking a volume serial number
-	values.VolumeSerial = fmt.Sprintf("%d", 1000000000+r.Intn(9000000000))
+	values.VolumeSerial = fmt.Sprintf("%d", r.Uint32())
 
 	// Generates a random string mimicking a disk model format
 	values.DiskModel = fmt.Sprintf("%s %s %s-%dG",

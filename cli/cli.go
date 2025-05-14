@@ -3,8 +3,10 @@ package cli
 import (
 	"bufio"
 	"errors"
+	"github.com/seekehr/DevSpoofGO/injector"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"time"
 
@@ -15,6 +17,7 @@ import (
 func Start(info *info.Info) {
 	logger.Cli("Enter the app you want to inject:")
 	app := getInput()
+	var pid int
 	if strings.HasSuffix(app, ".exe") {
 		logger.Info("Listening for " + app)
 		for {
@@ -26,6 +29,23 @@ func Start(info *info.Info) {
 
 			if condition {
 				logger.Success("Found " + app + " running")
+				getPid, _ := getProcessIDByName(app)
+				if getPid == 0 {
+					logger.Error("Failed to get process ID", nil)
+					os.Exit(1)
+					return
+				}
+				pid = getPid
+				logger.Success("Found PID for app " + app + ": " + strconv.Itoa(pid))
+
+				// Inject the DLL into the process
+				err = injector.Inject(pid) // Replace with actual DLL path
+				if err != nil {
+					logger.Error("Failed to inject DLL", err)
+					os.Exit(1)
+				} else {
+					logger.Success("DLL injected successfully")
+				}
 				break
 			} else {
 				logger.Warn("App " + app + " is not currently running")
@@ -41,9 +61,13 @@ func Start(info *info.Info) {
 	for {
 		condition, err := listenForApp(app)
 		if !condition || err != nil {
-			logger.Warn("App " + app + " is not currently running")
+			logger.Warn("App " + app + " is not currently running (re-inject by running `spoof inject`!)")
 			time.Sleep(1 * time.Second)
 			continue
+		} else if pid == 0 {
+			logger.Error("Failed to get process ID", nil)
+			os.Exit(1)
+			return
 		}
 
 		logger.Cli("Enter command: ")
@@ -104,7 +128,9 @@ func Start(info *info.Info) {
 			}
 
 			switch arg {
+			case "inject":
 
+				break
 			default:
 				logger.Error("Invalid argument for spoof", nil)
 			}
@@ -225,4 +251,34 @@ func createRegistryBackup() error {
 
 	logger.Info("Registry backup saved to: " + filename)
 	return nil
+}
+
+// getProcessIDByName returns the process ID of a process with the given name
+func getProcessIDByName(procName string) (int, error) {
+	// Use tasklist to get details of the process
+	cmd := exec.Command("tasklist", "/FI", "IMAGENAME eq "+procName, "/FO", "CSV", "/NH")
+	output, err := cmd.Output()
+	if err != nil {
+		return 0, err
+	}
+
+	// Parse the output to get the PID
+	lines := strings.Split(string(output), "\n")
+	if len(lines) < 1 || strings.TrimSpace(lines[0]) == "" { // Added check for empty output
+		return 0, errors.New("process not found")
+	}
+
+	// Remove quotes and split by comma
+	parts := strings.Split(strings.Trim(lines[0], "\"\r"), "\",\"")
+	if len(parts) < 2 {
+		return 0, errors.New("unexpected output format from tasklist")
+	}
+
+	// PID is the second column
+	pid, err := strconv.Atoi(parts[1])
+	if err != nil {
+		return 0, err
+	}
+
+	return pid, nil
 }

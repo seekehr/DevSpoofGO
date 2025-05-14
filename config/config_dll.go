@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"path/filepath"
 	"strconv"
 	"syscall"
@@ -51,13 +52,13 @@ func stringToCharPtr(s string) uintptr {
 func (h *DLLHandler) ConfigureDLL(values generator.RandomGeneratedValues) error {
 	// Set computer name (hostname)
 	_, _, err := h.setComputerName.Call(stringToCharPtr(values.Hostname))
-	if err != nil && err != syscall.Errno(0) { // syscall.Errno(0) means success
+	if err != nil && !errors.Is(err, syscall.Errno(0)) { // syscall.Errno(0) means success
 		return err
 	}
 
 	// Set processor ID
 	_, _, err = h.setProcessorId.Call(stringToCharPtr(values.ProcessorID))
-	if err != nil && err != syscall.Errno(0) {
+	if err != nil && !errors.Is(err, syscall.Errno(0)) {
 		return err
 	}
 
@@ -69,7 +70,7 @@ func (h *DLLHandler) ConfigureDLL(values generator.RandomGeneratedValues) error 
 
 	// Set volume serial number
 	_, _, err = h.setVolumeSerial.Call(uintptr(volumeSerial))
-	if err != nil && err != syscall.Errno(0) {
+	if err != nil && !errors.Is(err, syscall.Errno(0)) {
 		return err
 	}
 
@@ -103,9 +104,4 @@ func ConfigureAllWithValues(dllPath string, values generator.RandomGeneratedValu
 
 	// Configure DLL with provided values
 	return handler.ConfigureDLL(values)
-}
-
-// Close releases resources associated with the DLL handler
-func (h *DLLHandler) Close() {
-	// No explicit close needed for LazyDLL
 }
