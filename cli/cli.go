@@ -3,11 +3,14 @@ package cli
 import (
 	"bufio"
 	"errors"
+	"fmt"
+	"github.com/seekehr/DevSpoofGO/config"
 	"github.com/seekehr/DevSpoofGO/injector"
 	"os"
 	"os/exec"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	info "github.com/seekehr/DevSpoofGO/info"
@@ -39,12 +42,10 @@ func Start(info *info.Info) {
 				logger.Success("Found PID for app " + app + ": " + strconv.Itoa(pid))
 
 				// Inject the DLL into the process
-				err = injector.Inject(pid) // Replace with actual DLL path
-				if err != nil {
-					logger.Error("Failed to inject DLL", err)
+				if !cliInject(pid) {
+					logger.Error("Failed WHILE injecting DLL", nil)
 					os.Exit(1)
-				} else {
-					logger.Success("DLL injected successfully")
+					return
 				}
 				break
 			} else {
@@ -63,9 +64,17 @@ func Start(info *info.Info) {
 		if !condition || err != nil {
 			logger.Warn("App " + app + " is not currently running (re-inject by running `spoof inject`!)")
 			time.Sleep(1 * time.Second)
+			pid = 0
 			continue
 		} else if pid == 0 {
-			logger.Error("Failed to get process ID", nil)
+			newPid, err := getProcessIDByName(app)
+			if newPid > 0 && err == nil {
+				pid = newPid
+				logger.Success("Found new PID for app " + app + ": " + strconv.Itoa(pid))
+				continue
+			}
+
+			logger.Error("Failed to get process ID", err)
 			os.Exit(1)
 			return
 		}
@@ -129,7 +138,11 @@ func Start(info *info.Info) {
 
 			switch arg {
 			case "inject":
-
+				if !cliInject(pid) {
+					logger.Error("Failed WHILE injecting DLL", nil)
+					os.Exit(1)
+					return
+				}
 				break
 			default:
 				logger.Error("Invalid argument for spoof", nil)
@@ -145,6 +158,27 @@ func Start(info *info.Info) {
 			logger.Error("Invalid command", nil)
 		}
 	}
+}
+
+func cliInject(pid int) bool {
+	dllHandle, processHandle, err := injector.Inject(pid) // Replace with actual DLL path
+	if err != nil {
+		logger.Error("Failed to inject DLL", err)
+		os.Exit(1)
+		return false
+	} else {
+		logger.Success(fmt.Sprintf("DLL injected successfully. Base address (HMODULE): 0x%X and process address/handle: 0x%X", dllHandle, processHandle))
+		dllConfig := config.New(syscall.Handle(dllHandle), syscall.Handle(processHandle))
+		err := dllConfig.ConfigureDLL()
+		if err != nil {
+			logger.Error("Failed to configure DLL", err)
+			return false
+		} else {
+			logger.Success("DLL configured successfully")
+		}
+	}
+
+	return true
 }
 
 func listenForApp(app string) (bool, error) {

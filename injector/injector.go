@@ -23,31 +23,35 @@ var (
 )
 
 const (
-	PROCESS_ALL_ACCESS = 0x1F0FFF
-	MEM_COMMIT         = 0x1000
-	MEM_RESERVE        = 0x2000
-	PAGE_READWRITE     = 0x04
-	INFINITE           = 0xFFFFFFFF // Define INFINITE for WaitForSingleObject
+	ProcessQueryInformation = 0x0400
+	ProcessAllAccess        = 0x1F0FFF // requires higher privileges
 )
 
-func Inject(pid int) error {
+const (
+	MemCommit     = 0x1000
+	MemReserve    = 0x2000
+	PageReadwrite = 0x04
+	INFINITE      = 0xFFFFFFFF // Define INFINITE for WaitForSingleObject
+)
+
+func Inject(pid int) (uintptr, uintptr, error) {
 	// Open the target process
 	dllPath, _ := filepath.Abs("dll/spoof_dll.dll") // Path to the DLL to inject
 	if _, err := os.Stat(dllPath); errors.Is(err, os.ErrNotExist) {
 		wd, _ := os.Getwd()
-		return fmt.Errorf("DLL file does not exist! Working directory: %s", wd)
+		return 0, 0, fmt.Errorf("DLL file does not exist! Working directory: %s", wd)
 	}
 
 	handle, _, err := procOpenProcess.Call(
-		uintptr(PROCESS_ALL_ACCESS),
+		uintptr(ProcessAllAccess),
 		uintptr(0),
 		uintptr(pid),
 	)
 	if handle == 0 {
 		if err != nil && err.(syscall.Errno) != 0 {
-			return fmt.Errorf("failed to OpenProcess: %w", err)
+			return 0, 0, fmt.Errorf("failed to OpenProcess: %w", err)
 		}
-		return errors.New("failed to OpenProcess (handle is 0 and err is nil)")
+		return 0, 0, errors.New("failed to OpenProcess (handle is 0 and err is nil)")
 	}
 	defer procCloseHandle.Call(handle)
 
@@ -57,16 +61,15 @@ func Inject(pid int) error {
 		handle,
 		uintptr(0),
 		uintptr(len(dllPathBytes)), // Allocate size including the null terminator
-		uintptr(MEM_COMMIT|MEM_RESERVE),
-		uintptr(PAGE_READWRITE),
+		uintptr(MemCommit|MemReserve),
+		uintptr(PageReadwrite),
 	)
 	if remoteMem == 0 {
 		if err != nil && err.(syscall.Errno) != 0 {
-			return fmt.Errorf("failed to VirtualAllocEx: %w", err)
+			return 0, 0, fmt.Errorf("failed to VirtualAllocEx: %w", err)
 		}
-		return errors.New("failed to VirtualAllocEx (address is 0 and err is nil)")
+		return 0, 0, errors.New("failed to VirtualAllocEx (address is 0 and err is nil)")
 	}
-	fmt.Println("hi")
 
 	// Write the DLL path to the allocated memory
 	// WriteProcessMemory returns non-zero on success
@@ -82,19 +85,18 @@ func Inject(pid int) error {
 	// does not match the expected size.
 	if code == 0 || writtenBytes != uintptr(len(dllPathBytes)) {
 		if err != nil && err.(syscall.Errno) != 0 {
-			return fmt.Errorf("failed to WriteProcessMemory: %w", err)
+			return 0, 0, fmt.Errorf("failed to WriteProcessMemory: %w", err)
 		}
 		// If err is nil, it means the Call succeeded but wrote 0 bytes or the wrong amount
-		return fmt.Errorf("failed to WriteProcessMemory (code is 0 or written bytes mismatch). Expected %d, wrote %d", len(dllPathBytes), writtenBytes)
+		return 0, 0, fmt.Errorf("failed to WriteProcessMemory (code is 0 or written bytes mismatch). Expected %d, wrote %d", len(dllPathBytes), writtenBytes)
 	}
-	fmt.Println("hi2")
 
 	// Get the address of LoadLibraryA
 	loadLibraryAddr := procLoadLibraryA.Addr()
 	if loadLibraryAddr == 0 {
 		// LoadLibraryA.Addr() should not typically fail unless kernel32.dll isn't found,
 		// which is highly unlikely. The err from Addr() is usually nil.
-		return errors.New("failed to get address of LoadLibraryA")
+		return 0, 0, errors.New("failed to get address of LoadLibraryA")
 	}
 
 	// Create a remote thread to load the DLL
@@ -109,12 +111,10 @@ func Inject(pid int) error {
 	)
 	if thread == 0 {
 		if err != nil && err.(syscall.Errno) != 0 {
-			return fmt.Errorf("failed to CreateRemoteThread: %w", err)
+			return 0, 0, fmt.Errorf("failed to CreateRemoteThread: %w", err)
 		}
-		return errors.New("failed to CreateRemoteThread (handle is 0 and err is nil)")
+		return 0, 0, errors.New("failed to CreateRemoteThread (handle is 0 and err is nil)")
 	}
-	fmt.Println("hi3")
-	defer procCloseHandle.Call(thread)
 
 	// Wait for the thread to complete
 	// WaitForSingleObject returns WAIT_OBJECT_0 (0) on success
@@ -126,13 +126,11 @@ func Inject(pid int) error {
 	// Check if WaitForSingleObject itself failed
 	if waitResult != syscall.WAIT_OBJECT_0 {
 		if err != nil && err.(syscall.Errno) != 0 {
-			return fmt.Errorf("WaitForSingleObject failed or timed out: %w", err)
+			return 0, 0, fmt.Errorf("WaitForSingleObject failed or timed out: %w", err)
 		}
 		// This case is less likely with INFINITE timeout, but handle it
-		return fmt.Errorf("WaitForSingleObject returned unexpected result: %d", waitResult)
+		return 0, 0, fmt.Errorf("WaitForSingleObject returned unexpected result: %d", waitResult)
 	}
-
-	fmt.Println("hi4") // This should now be printed if WaitForSingleObject succeeds
 
 	// Get the exit code of the remote thread (the return value of LoadLibraryA)
 	var exitCode uint32
@@ -145,19 +143,38 @@ func Inject(pid int) error {
 
 	if ret == 0 { // GetExitCodeThread failed
 		if err != nil && err.(syscall.Errno) != 0 {
-			return fmt.Errorf("failed to GetExitCodeThread after waiting: %w", err)
+			return 0, 0, fmt.Errorf("failed to GetExitCodeThread after waiting: %w", err)
 		}
-		return errors.New("failed to GetExitCodeThread after waiting (ret is 0 and err is nil)")
+		return 0, 0, errors.New("failed to GetExitCodeThread after waiting (ret is 0 and err is nil)")
 	}
 
 	// Check the exit code (LoadLibraryA's return value)
 	if exitCode == 0 {
 		// LoadLibraryA returned NULL, indicating failure to load the DLL
-		return errors.New("loadLibraryA failed in the remote process (returned NULL). Possible reasons: DLL not found, missing dependencies, architecture mismatch, or security restrictions")
+		return 0, 0, errors.New("loadLibraryA failed in the remote process (returned NULL). Possible reasons: DLL not found, missing dependencies, architecture mismatch, or security restrictions")
 	}
 
-	// If we reached here, LoadLibraryA returned a non-NULL address (exitCode)
-	// which is the base address of the loaded DLL. Injection was successful.
-	fmt.Printf("DLL injected successfully. Base address: 0x%X\n", exitCode)
-	return nil
+	// LoadLibraryA succeeded and returned a non-NULL HMODULE/HINSTANCE
+	// exitCode holds this handle value (as a uint32).
+	// Cast it to uintptr for correct representation as a handle.
+	injectedDLLModule := uintptr(exitCode)
+
+	// Call OpenProcess
+	// Parameters:
+	// 1. dwDesiredAccess (uintptr): The access rights you want (e.g., PROCESS_QUERY_INFORMATION)
+	// 2. bInheritHandle (uintptr): Whether child processes inherit the handle (0 for FALSE)
+	// 3. dwProcessId (uintptr): The PID of the target process
+	processHandle, _, err := procOpenProcess.Call(
+		uintptr(ProcessAllAccess), // Request full access
+		uintptr(0),                // Do not inherit the handle
+		uintptr(pid),              // The target process ID
+	)
+	if processHandle == 0 {
+		if err != nil && err.(syscall.Errno) != 0 {
+			return 0, 0, fmt.Errorf("failed to OpenProcess for query: %w", err)
+		}
+		return 0, 0, errors.New("failed to OpenProcess for query (handle is 0 and err is nil)")
+	}
+
+	return injectedDLLModule, processHandle, nil // Return the handle to the process' instance of the DLL module AND the handle to the process
 }
