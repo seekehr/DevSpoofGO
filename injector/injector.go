@@ -14,7 +14,6 @@ var (
 	procOpenProcess         = kernel32.NewProc("OpenProcess")
 	procVirtualAllocEx      = kernel32.NewProc("VirtualAllocEx")
 	procWriteProcessMemory  = kernel32.NewProc("WriteProcessMemory")
-	procGetProcAddress      = kernel32.NewProc("GetProcAddress") // Not strictly needed for basic LoadLibraryA injection but good to have
 	procLoadLibraryA        = kernel32.NewProc("LoadLibraryA")
 	procCreateRemoteThread  = kernel32.NewProc("CreateRemoteThread")
 	procWaitForSingleObject = kernel32.NewProc("WaitForSingleObject")
@@ -23,15 +22,14 @@ var (
 )
 
 const (
-	ProcessQueryInformation = 0x0400
-	ProcessAllAccess        = 0x1F0FFF // requires higher privileges
+	ProcessAllAccess = 0x1F0FFF
 )
 
 const (
 	MemCommit     = 0x1000
 	MemReserve    = 0x2000
 	PageReadwrite = 0x04
-	INFINITE      = 0xFFFFFFFF // Define INFINITE for WaitForSingleObject
+	INFINITE      = 0xFFFFFFFF
 )
 
 func Inject(pid int) (uintptr, uintptr, error) {
@@ -53,7 +51,6 @@ func Inject(pid int) (uintptr, uintptr, error) {
 		}
 		return 0, 0, errors.New("failed to OpenProcess (handle is 0 and err is nil)")
 	}
-	defer procCloseHandle.Call(handle)
 
 	// Allocate memory in the target process
 	dllPathBytes := append([]byte(dllPath), 0) // Null-terminate the string
@@ -132,14 +129,12 @@ func Inject(pid int) (uintptr, uintptr, error) {
 		return 0, 0, fmt.Errorf("WaitForSingleObject returned unexpected result: %d", waitResult)
 	}
 
-	// Get the exit code of the remote thread (the return value of LoadLibraryA)
-	var exitCode uint32
 	// GetExitCodeThread returns non-zero on success
-	// syscall.Syscall is used here because GetExitCodeThread takes a pointer to a DWORD
-	ret, _, err := syscall.Syscall(procGetExitCodeThread.Addr(), 2,
+	var exitCode uint32
+	ret, _, err := procGetExitCodeThread.Call(
 		thread,
 		uintptr(unsafe.Pointer(&exitCode)),
-		0)
+	)
 
 	if ret == 0 { // GetExitCodeThread failed
 		if err != nil && err.(syscall.Errno) != 0 {
@@ -159,22 +154,5 @@ func Inject(pid int) (uintptr, uintptr, error) {
 	// Cast it to uintptr for correct representation as a handle.
 	injectedDLLModule := uintptr(exitCode)
 
-	// Call OpenProcess
-	// Parameters:
-	// 1. dwDesiredAccess (uintptr): The access rights you want (e.g., PROCESS_QUERY_INFORMATION)
-	// 2. bInheritHandle (uintptr): Whether child processes inherit the handle (0 for FALSE)
-	// 3. dwProcessId (uintptr): The PID of the target process
-	processHandle, _, err := procOpenProcess.Call(
-		uintptr(ProcessAllAccess), // Request full access
-		uintptr(0),                // Do not inherit the handle
-		uintptr(pid),              // The target process ID
-	)
-	if processHandle == 0 {
-		if err != nil && err.(syscall.Errno) != 0 {
-			return 0, 0, fmt.Errorf("failed to OpenProcess for query: %w", err)
-		}
-		return 0, 0, errors.New("failed to OpenProcess for query (handle is 0 and err is nil)")
-	}
-
-	return injectedDLLModule, processHandle, nil // Return the handle to the process' instance of the DLL module AND the handle to the process
+	return injectedDLLModule, handle, nil // Return the handle to the process' instance of the DLL module AND the handle to the process
 }

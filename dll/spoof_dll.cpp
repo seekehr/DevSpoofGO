@@ -1,4 +1,3 @@
-// spoof_dll.cpp
 #include <windows.h>
 #include <string>     // For std::string, std::wstring
 #include <cstdio>     // For swprintf_s

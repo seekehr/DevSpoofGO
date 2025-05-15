@@ -168,8 +168,14 @@ func cliInject(pid int) bool {
 		return false
 	} else {
 		logger.Success(fmt.Sprintf("DLL injected successfully. Base address (HMODULE): 0x%X and process address/handle: 0x%X", dllHandle, processHandle))
-		dllConfig := config.New(syscall.Handle(dllHandle), syscall.Handle(processHandle))
-		err := dllConfig.ConfigureDLL()
+		dllConfig, err := config.New(syscall.Handle(dllHandle), syscall.Handle(processHandle))
+		if err != nil {
+			logger.Error("Failed to create DLL config", err)
+			os.Exit(1)
+			return false
+		}
+
+		err = dllConfig.ConfigureDLL()
 		if err != nil {
 			logger.Error("Failed to configure DLL", err)
 			return false
