@@ -9,7 +9,7 @@ All configuration — like what name or serial to spoof — is passed in at runt
 
 As such ;3, the app believes it's getting real system info, but it's actually getting the values we've injected. No file edits, no system changes — just a clean, in-memory override.
 
-Todo:
+# TODO:
 - [ ] Intercept WMI calls too
 - [ ] Update registry values too perhaps (for basic things like pc name at least) and then automatically load the backed up registry once program is terminated for a more seamless experience
 - [ ] Update DLL to include more information (like motherboard serial)
