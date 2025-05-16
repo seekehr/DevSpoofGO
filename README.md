@@ -7,7 +7,7 @@ This project works by injecting a custom DLL into the target process. The DLL us
 
 All configuration — like what name or serial to spoof — is passed in at runtime from the injector, written in Go. It uses `VirtualAllocEx`, `WriteProcessMemory`, `CreateRemoteThread`, etc to load the DLL and call its setup functions directly in the target process.
 
-As such ;3, the app believes it's getting real system info, but it's actually getting the values we've injected. No file edits, no system changes — just a clean, in-memory override.
+As such ;3, the app believes it's getting real system info, but it's actually getting the values we've injected. No file edits, no system changes; just an in-memory override.
 
 ## C++?
 
