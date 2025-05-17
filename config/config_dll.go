@@ -30,7 +30,6 @@ const pageReadwrite = 0x04
 
 const SetSpoofedPcName = ConfigValue("SetSpoofedComputerName")
 const SetSpoofedVolSerial = ConfigValue("SetSpoofedVolumeSerial")
-const SetSpoofedProcId = ConfigValue("SetSpoofedProcessorId")
 
 type Config struct {
 	localDll      *syscall.DLL
@@ -63,9 +62,6 @@ func (c *Config) ConfigureDLL() error {
 	}
 	if err := c.SetValue(SetSpoofedVolSerial, c.values.VolumeSerial); err != nil {
 		return fmt.Errorf("failed to set spoofed volume serial: %w", err)
-	}
-	if err := c.SetValue(SetSpoofedProcId, c.values.ProcessorID); err != nil {
-		return fmt.Errorf("failed to set spoofed processor ID: %w", err)
 	}
 
 	return nil

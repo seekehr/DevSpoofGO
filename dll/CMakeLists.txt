@@ -1,17 +1,24 @@
 cmake_minimum_required(VERSION 3.10)
-project(spoof_dll CXX)
+project(DevSpoofGO)
 
-set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
-set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+# Set C++ standard
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Change to x64 if needed
-set(DETOURS_ARCH "X64")
+# Define the DLL target
+add_library(spoof_dll SHARED
+    spoof_dll.cpp
+    info/disk_info.cpp
+    info/os_info.cpp
+)
 
-include_directories(${CMAKE_SOURCE_DIR}/detours/include)
+# Set include directories
+target_include_directories(spoof_dll PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/detours/include
+)
 
-link_directories(${CMAKE_SOURCE_DIR}/detours/lib.${DETOURS_ARCH})
-
-add_library(spoof_dll SHARED spoof_dll.cpp)
-
-target_link_libraries(spoof_dll detours)
+# Link with Detours library
+target_link_libraries(spoof_dll
+    ${CMAKE_CURRENT_SOURCE_DIR}/detours/lib.X64/detours.lib
+)
