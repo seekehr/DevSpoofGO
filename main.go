@@ -12,7 +12,6 @@ import (
 
 func main() {
 	admin := isAdmin()
-	logger.Init()
 	if !admin {
 		logger.Error("Program is not running with administrator privileges", nil)
 		os.Exit(1)

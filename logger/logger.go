@@ -26,10 +26,6 @@ func isLikelyConsole() bool {
 
 var supportsColor = isLikelyConsole()
 
-func Init() {
-	fmt.Println("Supports color:", supportsColor)
-}
-
 func colorize(colorCode string, message string) string {
 	if !supportsColor {
 		return message
