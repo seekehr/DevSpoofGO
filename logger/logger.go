@@ -2,15 +2,60 @@ package logger
 
 import (
 	"fmt"
-
-	"github.com/fatih/color"
+	"os"
 )
 
-var red = color.New(color.FgRed).SprintFunc()
-var green = color.New(color.FgGreen).SprintFunc()
-var blue = color.New(color.FgBlue).SprintFunc()
-var yellow = color.New(color.FgYellow).SprintFunc()
-var cyan = color.New(color.FgCyan).SprintFunc()
+const (
+	redCode    = "\033[31m"
+	greenCode  = "\033[32m"
+	yellowCode = "\033[33m"
+	blueCode   = "\033[34m"
+	cyanCode   = "\033[36m"
+	reset      = "\033[0m"
+)
+
+func isLikelyConsole() bool {
+	if os.Getenv("WT_SESSION") != "" {
+		return true // Windows Terminal
+	}
+	if os.Getenv("TERM_PROGRAM") == "vscode" {
+		return true // VSCode terminal
+	}
+	return false
+}
+
+var supportsColor = isLikelyConsole()
+
+func Init() {
+	fmt.Println("Supports color:", supportsColor)
+}
+
+func colorize(colorCode string, message string) string {
+	if !supportsColor {
+		return message
+	}
+	return colorCode + message + reset
+}
+
+func red(message string) string {
+	return colorize(redCode, message)
+}
+
+func green(message string) string {
+	return colorize(greenCode, message)
+}
+
+func yellow(message string) string {
+	return colorize(yellowCode, message)
+}
+
+func blue(message string) string {
+	return colorize(blueCode, message)
+}
+
+func cyan(message string) string {
+	return colorize(cyanCode, message)
+}
 
 func Cli(message string) {
 	fmt.Println(cyan("DevSpoofGO> ") + message)

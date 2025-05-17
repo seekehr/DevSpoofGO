@@ -12,3 +12,4 @@ dll/spoof_dll.exp
 dll/.idea
 dll/spoof_dll.lib
 dll/spoof_dll.obj
+*.exe

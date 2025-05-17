@@ -1,9 +1,10 @@
 package main
 
 import (
-	cli "github.com/seekehr/DevSpoofGO/cli"
-	info "github.com/seekehr/DevSpoofGO/info"
-	logger "github.com/seekehr/DevSpoofGO/logger"
+	"fmt"
+	"github.com/seekehr/DevSpoofGO/cli"
+	"github.com/seekehr/DevSpoofGO/info"
+	"github.com/seekehr/DevSpoofGO/logger"
 	"os"
 	"syscall"
 	"time"
@@ -11,15 +12,16 @@ import (
 
 func main() {
 	admin := isAdmin()
+	logger.Init()
 	if !admin {
 		logger.Error("Program is not running with administrator privileges", nil)
 		os.Exit(1)
 	}
 
-	logger.Info("Starting program...")
+	fmt.Println("Starting program...")
 	startTime := time.Now()
 	newInfo := info.NewInfo()
-	logger.Info("Info loaded in: " + time.Since(startTime).String())
+	fmt.Println("Info loaded in: " + time.Since(startTime).String())
 	cli.Start(newInfo)
 }
 

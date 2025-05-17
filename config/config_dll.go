@@ -69,10 +69,11 @@ func (c *Config) ConfigureDLL() error {
 
 func openLocalDll() (*syscall.DLL, error) {
 	dllPath, _ := filepath.Abs("dll/spoof_dll.dll")
+	wd, _ := os.Getwd()
 	if _, err := os.Stat(dllPath); errors.Is(err, os.ErrNotExist) {
-		wd, _ := os.Getwd()
 		return nil, fmt.Errorf("DLL file does not exist! Working directory: %s", wd)
 	}
+	fmt.Printf("Opening DLL from: %s\n", wd)
 	dll, err := syscall.LoadDLL(dllPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load DLL locally (%s): %w", dllPath, err)
