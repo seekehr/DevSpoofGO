@@ -5,6 +5,7 @@
 #include "detours.h"  // Microsoft Detours library
 #include "info/disk_info.h" // For volume information related functions
 #include "info/os_info.h"   // For computer name related functions
+#include "info/hardware_info.h" // For hardware information related functions
 
 // --- DLL entry point ---
 BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason) {
@@ -33,6 +34,9 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason) {
         // Volume information hooks
         DetourAttach(GetRealGetVolumeInformationA(), GetHookedGetVolumeInformationA());
         DetourAttach(GetRealGetVolumeInformationW(), GetHookedGetVolumeInformationW());
+        
+        // Hardware information hooks
+        DetourAttach(GetRealGetSystemFirmwareTable(), GetHookedGetSystemFirmwareTable());
 
         // Commit the transaction - this applies the hooks
         LONG error = DetourTransactionCommit();
@@ -66,6 +70,9 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason) {
         // Volume information hooks
         DetourDetach(GetRealGetVolumeInformationA(), GetHookedGetVolumeInformationA());
         DetourDetach(GetRealGetVolumeInformationW(), GetHookedGetVolumeInformationW());
+        
+        // Hardware information hooks
+        DetourDetach(GetRealGetSystemFirmwareTable(), GetHookedGetSystemFirmwareTable());
 
         // Commit the transaction - this removes the hooks
         DetourTransactionCommit();
