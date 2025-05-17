@@ -13,6 +13,8 @@ char g_processorId[256] = "BFEBFBFF000906ED";      // Spoofed processor ID (Note
 // --- Function pointers to original Windows API functions ---
 // Pointer to the original GetComputerNameW function
 static BOOL (WINAPI *Real_GetComputerNameW)(LPWSTR, LPDWORD) = GetComputerNameW;
+// Pointer to the original GetComputerNameA function
+static BOOL (WINAPI *Real_GetComputerNameA)(LPSTR, LPDWORD) = GetComputerNameA;
 
 // Pointer to the original GetVolumeInformationA function (keep if targeting ANSI callers)
 static BOOL (WINAPI *Real_GetVolumeInformationA)(LPCSTR, LPSTR, DWORD, LPDWORD, LPDWORD, LPDWORD, LPSTR, DWORD) = GetVolumeInformationA;
@@ -21,6 +23,35 @@ static BOOL (WINAPI *Real_GetVolumeInformationA)(LPCSTR, LPSTR, DWORD, LPDWORD, 
 static BOOL (WINAPI *Real_GetVolumeInformationW)(LPCWSTR, LPWSTR, DWORD, LPDWORD, LPDWORD, LPDWORD, LPWSTR, DWORD) = GetVolumeInformationW;
 
 // --- Hook functions ---
+
+// Hook function for GetComputerNameA - takes and returns ANSI characters
+BOOL WINAPI Hooked_GetComputerNameA(LPSTR lpBuffer, LPDWORD nSize) {
+    // First, we need to convert our Unicode computer name to ANSI
+    char ansiName[256];
+    size_t convertedChars = 0;
+    wcstombs_s(&convertedChars, ansiName, sizeof(ansiName), g_computerNameW, _TRUNCATE);
+
+    // Calculate the length of the spoofed name (excluding null terminator)
+    size_t spoofedNameLen = strlen(ansiName);
+    // Calculate the required buffer size (including null terminator)
+    size_t requiredSize = spoofedNameLen + 1;
+
+    // Check if the provided buffer is large enough
+    if (*nSize < requiredSize) {
+        *nSize = static_cast<DWORD>(requiredSize); // Set the required size
+        SetLastError(ERROR_BUFFER_OVERFLOW); // Indicate buffer overflow
+        return FALSE; // Return FALSE to signal failure
+    }
+
+    // Copy the spoofed name to the output buffer
+    strcpy_s(lpBuffer, *nSize, ansiName); // Use secure character copy
+
+    // Set the size returned to the caller (length of the string, excluding null terminator)
+    *nSize = static_cast<DWORD>(spoofedNameLen);
+
+    // Return TRUE to signal success
+    return TRUE;
+}
 
 // Hook function for GetComputerNameW - takes and returns wide characters (LPWSTR)
 BOOL WINAPI Hooked_GetComputerNameW(LPWSTR lpBuffer, LPDWORD nSize) {
@@ -136,6 +167,7 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason) {
         // Attach our hook function (Hooked_GetComputerNameW) to the real function (Real_GetComputerNameW points to GetComputerNameW)
         // The &(PVOID&) cast is required by Detours to cast a typed function pointer to a PVOID&
         DetourAttach(&reinterpret_cast<PVOID &>(Real_GetComputerNameW), Hooked_GetComputerNameW);
+        DetourAttach(&reinterpret_cast<PVOID &>(Real_GetComputerNameA), Hooked_GetComputerNameA);
         DetourAttach(&reinterpret_cast<PVOID &>(Real_GetVolumeInformationA), Hooked_GetVolumeInformationA);
         DetourAttach(&reinterpret_cast<PVOID &>(Real_GetVolumeInformationW), Hooked_GetVolumeInformationW);
 
@@ -167,6 +199,7 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason) {
         // --- Remove hooks ---
         // Detach our hook function from the real function
         DetourDetach(&reinterpret_cast<PVOID &>(Real_GetComputerNameW), Hooked_GetComputerNameW);
+        DetourDetach(&reinterpret_cast<PVOID &>(Real_GetComputerNameA), Hooked_GetComputerNameA);
         DetourDetach(&reinterpret_cast<PVOID &>(Real_GetVolumeInformationA), Hooked_GetVolumeInformationA);
         DetourDetach(&reinterpret_cast<PVOID &>(Real_GetVolumeInformationW), Hooked_GetVolumeInformationW);
 
