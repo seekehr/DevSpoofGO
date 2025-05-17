@@ -7,3 +7,7 @@
 .env.test.local
 .reg
 todo.txt
+dll/build
+dll/spoof_dll.exp
+dll/spoof_dll.lib
+dll/spoof_dll.obj

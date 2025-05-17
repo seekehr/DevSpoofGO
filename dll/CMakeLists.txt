@@ -1,17 +1,17 @@
 cmake_minimum_required(VERSION 3.10)
-project(spoof_dll C)
+project(spoof_dll CXX)
 
 set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 # Change to x64 if needed
-set(DETOURS_ARCH "X86")
+set(DETOURS_ARCH "X64")
 
 include_directories(${CMAKE_SOURCE_DIR}/detours/include)
 
 link_directories(${CMAKE_SOURCE_DIR}/detours/lib.${DETOURS_ARCH})
 
-add_library(spoof_dll SHARED spoof_dll.c)
+add_library(spoof_dll SHARED spoof_dll.cpp)
 
-target_link_libraries(spoof_dll detours detoured)
+target_link_libraries(spoof_dll detours)

@@ -32,6 +32,7 @@ const (
 	INFINITE      = 0xFFFFFFFF
 )
 
+// Inject injects spoof_dll.dll into the target process, returning the handles to the DLL module and the target opened process
 func Inject(pid int) (uintptr, uintptr, error) {
 	// Open the target process
 	dllPath, _ := filepath.Abs("dll/spoof_dll.dll") // Path to the DLL to inject
