@@ -38,7 +38,7 @@ func Inject(pid int) (uintptr, uintptr, error) {
 	dllPath, _ := filepath.Abs("dll/spoof_dll.dll") // Path to the DLL to inject
 	if _, err := os.Stat(dllPath); errors.Is(err, os.ErrNotExist) {
 		wd, _ := os.Getwd()
-		return 0, 0, fmt.Errorf("DLL file does not exist! Working directory: %s", wd)
+		return 0, 0, fmt.Errorf("DLL file does not exist! Working dir: %s, full path: %s", wd, dllPath)
 	}
 
 	handle, _, err := procOpenProcess.Call(

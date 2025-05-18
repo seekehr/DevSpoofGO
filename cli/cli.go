@@ -4,8 +4,6 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
-	"github.com/seekehr/DevSpoofGO/config"
-	"github.com/seekehr/DevSpoofGO/injector"
 	"os"
 	"os/exec"
 	"strconv"
@@ -13,11 +11,14 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/seekehr/DevSpoofGO/config"
+	"github.com/seekehr/DevSpoofGO/injector"
+
 	info "github.com/seekehr/DevSpoofGO/info"
 	logger "github.com/seekehr/DevSpoofGO/logger"
 )
 
-func Start(info *info.Info) {
+func Start(dll *syscall.DLL, info *info.Info) {
 	logger.Cli("Enter the app you want to inject:")
 	app := getInput()
 	var pid int
@@ -42,7 +43,7 @@ func Start(info *info.Info) {
 				logger.Success("Found PID for app " + app + ": " + strconv.Itoa(pid))
 
 				// Inject the DLL into the process
-				if !cliInject(pid) {
+				if !cliInject(dll, pid) {
 					logger.Error("Failed WHILE injecting DLL", nil)
 					os.Exit(1)
 					return
@@ -138,7 +139,7 @@ func Start(info *info.Info) {
 
 			switch arg {
 			case "inject":
-				if !cliInject(pid) {
+				if !cliInject(dll, pid) {
 					logger.Error("Failed WHILE injecting DLL", nil)
 					os.Exit(1)
 					return
@@ -160,7 +161,7 @@ func Start(info *info.Info) {
 	}
 }
 
-func cliInject(pid int) bool {
+func cliInject(dll *syscall.DLL, pid int) bool {
 	dllHandle, processHandle, err := injector.Inject(pid) // Replace with actual DLL path
 	if err != nil {
 		logger.Error("Failed to inject DLL", err)
@@ -168,13 +169,8 @@ func cliInject(pid int) bool {
 		return false
 	} else {
 		logger.Success(fmt.Sprintf("DLL injected successfully. Base address (HMODULE): 0x%X and process address/handle: 0x%X", dllHandle, processHandle))
-		dllConfig, err := config.New(syscall.Handle(dllHandle), syscall.Handle(processHandle))
-		if err != nil {
-			logger.Error("Failed to create DLL config", err)
-			os.Exit(1)
-			return false
-		}
 
+		dllConfig := config.New(dll, syscall.Handle(dllHandle), syscall.Handle(processHandle))
 		err = dllConfig.ConfigureDLL()
 		if err != nil {
 			logger.Error("Failed to configure DLL", err)

@@ -5,8 +5,6 @@ import (
 	"fmt"
 	generator "github.com/seekehr/DevSpoofGO/config/generator"
 	"github.com/seekehr/DevSpoofGO/logger"
-	"os"
-	"path/filepath"
 	"syscall"
 	"unsafe"
 )
@@ -39,19 +37,14 @@ type Config struct {
 	Closed        bool
 }
 
-func New(handle syscall.Handle, processHandle syscall.Handle) (Config, error) {
-	dll, err := openLocalDll()
-	if err != nil {
-		return Config{}, err
-	}
-
+func New(dll *syscall.DLL, handle syscall.Handle, processHandle syscall.Handle) Config {
 	return Config{
 		localDll:      dll,
 		dllHandle:     handle,
 		processHandle: processHandle,
 		values:        generator.GenerateRandomValues(),
 		Closed:        false,
-	}, nil
+	}
 }
 
 // ConfigureDLL initial function to set default values
@@ -65,20 +58,6 @@ func (c *Config) ConfigureDLL() error {
 	}
 
 	return nil
-}
-
-func openLocalDll() (*syscall.DLL, error) {
-	dllPath, _ := filepath.Abs("dll/spoof_dll.dll")
-	wd, _ := os.Getwd()
-	if _, err := os.Stat(dllPath); errors.Is(err, os.ErrNotExist) {
-		return nil, fmt.Errorf("DLL file does not exist! Working directory: %s", wd)
-	}
-	fmt.Printf("Opening DLL from: %s\n", wd)
-	dll, err := syscall.LoadDLL(dllPath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load DLL locally (%s): %w", dllPath, err)
-	}
-	return dll, nil
 }
 
 func (c *Config) calculateOffset(functionName ConfigValue) (uintptr, error) {
