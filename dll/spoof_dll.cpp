@@ -1,4 +1,7 @@
+#define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#include <winsock2.h> // Must come before iphlpapi.h
+#include <ws2tcpip.h>
 #include <string>     // For std::string, std::wstring
 #include <cstdio>     // For swprintf_s
 #include <cstring>    // For wcslen, wcscpy_s, mbstowcs_s
@@ -6,6 +9,7 @@
 #include "info/disk/vol_info.h" // For volume information related functions
 #include "info/os/os_info.h"   // For computer name related functions
 #include "info/hardware/motherboard_serial.h" // For motherboard serial related functions
+#include "info/network/wlan_info.h" // For WLAN information related functions
 
 // --- DLL entry point ---
 BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason) {
@@ -37,6 +41,11 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason) {
         
         // Hardware information hooks
         DetourAttach(GetRealGetSystemFirmwareTable(), GetHookedGetSystemFirmwareTable());
+        
+        // Network information hooks
+        DetourAttach(GetRealGetAdaptersInfo(), GetHookedGetAdaptersInfo());
+        DetourAttach(GetRealGetAdaptersAddresses(), GetHookedGetAdaptersAddresses());
+        DetourAttach(GetRealWlanEnumInterfaces(), GetHookedWlanEnumInterfaces());
 
         // Commit the transaction - this applies the hooks
         LONG error = DetourTransactionCommit();
@@ -73,6 +82,11 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason) {
         
         // Hardware information hooks
         DetourDetach(GetRealGetSystemFirmwareTable(), GetHookedGetSystemFirmwareTable());
+        
+        // Network information hooks
+        DetourDetach(GetRealGetAdaptersInfo(), GetHookedGetAdaptersInfo());
+        DetourDetach(GetRealGetAdaptersAddresses(), GetHookedGetAdaptersAddresses());
+        DetourDetach(GetRealWlanEnumInterfaces(), GetHookedWlanEnumInterfaces());
 
         // Commit the transaction - this removes the hooks
         DetourTransactionCommit();

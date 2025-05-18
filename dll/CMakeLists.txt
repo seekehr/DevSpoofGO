@@ -11,6 +11,7 @@ add_library(spoof_dll SHARED
     info/disk/vol_info.cpp
     info/os/os_info.cpp
     info/hardware/motherboard_serial.cpp
+    info/network/wlan_info.cpp
 )
 
 # Set include directories

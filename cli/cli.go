@@ -18,9 +18,13 @@ import (
 	logger "github.com/seekehr/DevSpoofGO/logger"
 )
 
-func Start(dll *syscall.DLL, info *info.Info) {
+func Start(dll *syscall.DLL, info *info.Info, testEnv bool) {
 	logger.Cli("Enter the app you want to inject:")
-	app := getInput()
+	app := "DevSpoofGOTest.exe"
+	if !testEnv {
+		app = getInput()
+	}
+
 	var pid int
 	if strings.HasSuffix(app, ".exe") {
 		logger.Info("Listening for " + app)
