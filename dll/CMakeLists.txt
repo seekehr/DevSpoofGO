@@ -8,9 +8,9 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # Define the DLL target
 add_library(spoof_dll SHARED
     spoof_dll.cpp
-    info/disk_info.cpp
-    info/os_info.cpp
-    info/hardware_info.cpp
+    info/disk/vol_info.cpp
+    info/os/os_info.cpp
+    info/hardware/motherboard_serial.cpp
 )
 
 # Set include directories

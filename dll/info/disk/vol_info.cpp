@@ -1,5 +1,5 @@
 #include <windows.h>
-#include "disk_info.h"
+#include "vol_info.h"
 
 // --- Volume information related global variables ---
 DWORD g_volumeSerial = 0xABCD1234;  // Spoofed volume serial

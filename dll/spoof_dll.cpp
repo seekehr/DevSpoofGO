@@ -3,9 +3,9 @@
 #include <cstdio>     // For swprintf_s
 #include <cstring>    // For wcslen, wcscpy_s, mbstowcs_s
 #include "detours.h"  // Microsoft Detours library
-#include "info/disk_info.h" // For volume information related functions
-#include "info/os_info.h"   // For computer name related functions
-#include "info/hardware_info.h" // For hardware information related functions
+#include "info/disk/vol_info.h" // For volume information related functions
+#include "info/os/os_info.h"   // For computer name related functions
+#include "info/hardware/motherboard_serial.h" // For motherboard serial related functions
 
 // --- DLL entry point ---
 BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason) {

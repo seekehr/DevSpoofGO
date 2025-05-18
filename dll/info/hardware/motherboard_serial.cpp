@@ -1,7 +1,7 @@
 #include <windows.h>
 #include <cstring>    // For strlen, wcscpy_s, mbstowcs_s
 #include <cstdio>     // For sprintf_s
-#include "hardware_info.h"
+#include "motherboard_serial.h"
 
 // --- Hardware information related global variables ---
 // Store the spoofed motherboard serial number

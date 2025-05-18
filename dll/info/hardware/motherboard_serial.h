@@ -17,4 +17,4 @@ PVOID* GetRealGetSystemFirmwareTable();
 PVOID GetHookedGetSystemFirmwareTable();
 
 // Access to the spoofed motherboard serial (for other modules if needed)
-const WCHAR* GetSpoofedMotherboardSerial();
+const WCHAR* GetSpoofedMotherboardSerial(); 
