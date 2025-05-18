@@ -3,7 +3,6 @@ package main
 import (
 	"errors"
 	"fmt"
-	"github.com/seekehr/DevSpoofGO/debug"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -40,7 +39,6 @@ func main() {
 	} else {
 		logger.Success("DLL loaded successfully")
 	}
-	debug.MotherboardSerial(dll)
 
 	cli.Start(dll, newInfo)
 }

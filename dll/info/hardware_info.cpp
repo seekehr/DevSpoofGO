@@ -135,6 +135,7 @@ bool FindBaseboardStructure(const BYTE* start, const BYTE* end,
 
 // --- Function to get the original motherboard serial ---
 static const char* Internal_GetMotherboardSerial() {
+    OutputDebugStringW(L"Internal_GetMotherboardSerial called");
     static char serialBuffer[256] = {0};
     
     const DWORD signature = 'RSMB'; // SMBIOS
@@ -197,7 +198,6 @@ static const char* Internal_GetMotherboardSerial() {
 // --- Function for export ---
 extern "C" {
     __declspec(dllexport) const char* GetOriginalMotherboardSerial() {
-        // Call the internal implementation
         return Internal_GetMotherboardSerial();
     }
 }

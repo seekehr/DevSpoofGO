@@ -11,9 +11,9 @@ As such ;3, the app believes it's getting real system info, but it's actually ge
 
 ## C++?
 
-Within the `dll/` folder only. I'd create a separate repo for it but I don't want to repo spam my poor git profile D;, plus it's more convenient to work like this. A pre-generated spoof_dll.dll exists but you can re-generate with (in the Developer Command Prompt for VS):
+Within the `dll/` folder only. I'd create a separate repo for it but I don't want to repo spam my poor git profile D;, plus it's more convenient to work like this. A pre-generated spoof_dll.dll exists but you can build it using CMake:
 
-`cl spoof_dll.cpp /LD /I detours\include /link detours\lib.X64\detours.lib`
+`cmake --build .`
 
 # TODO:
 - [ ] Intercept WMI calls too

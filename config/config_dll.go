@@ -28,6 +28,7 @@ const pageReadwrite = 0x04
 
 const SetSpoofedPcName = ConfigValue("SetSpoofedComputerName")
 const SetSpoofedVolSerial = ConfigValue("SetSpoofedVolumeSerial")
+const SetSpoofedMotherboardSerial = ConfigValue("SetSpoofedMotherboardSerial")
 
 type Config struct {
 	localDll      *syscall.DLL
@@ -55,6 +56,9 @@ func (c *Config) ConfigureDLL() error {
 	}
 	if err := c.SetValue(SetSpoofedVolSerial, c.values.VolumeSerial); err != nil {
 		return fmt.Errorf("failed to set spoofed volume serial: %w", err)
+	}
+	if err := c.SetValue(SetSpoofedMotherboardSerial, c.values.Motherboard); err != nil {
+		return fmt.Errorf("failed to set spoofed motherboard serial: %w", err)
 	}
 
 	return nil
