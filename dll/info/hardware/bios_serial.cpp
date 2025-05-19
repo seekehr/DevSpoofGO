@@ -8,7 +8,6 @@
 WCHAR g_biosSerial[256] = L"BIOSSERIAL12345"; // Default value (15 characters)
 
 // --- Function pointer to original Windows API function ---
-// This will be set by hardware_info.c via InitializeBiosSerialHooks or another mechanism
 static UINT (WINAPI *Real_GetSystemFirmwareTable_Bios)(DWORD, DWORD, PVOID, DWORD) = nullptr;
 
 // --- SMBIOS structure definitions (copied and adapted from motherboard_serial.cpp) ---
