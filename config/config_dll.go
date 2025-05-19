@@ -29,6 +29,9 @@ const pageReadwrite = 0x04
 const SetSpoofedPcName = ConfigValue("SetSpoofedComputerName")
 const SetSpoofedVolSerial = ConfigValue("SetSpoofedVolumeSerial")
 const SetSpoofedMotherboardSerial = ConfigValue("SetSpoofedMotherboardSerial")
+const SetSpoofedMacAddress = ConfigValue("SetSpoofedMacAddress")
+const SetSpoofedWlanGUID = ConfigValue("SetSpoofedWlanGUID")
+const SetSpoofedBSSID = ConfigValue("SetSpoofedBSSID")
 
 type Config struct {
 	localDll      *syscall.DLL
@@ -59,6 +62,18 @@ func (c *Config) ConfigureDLL() error {
 	}
 	if err := c.SetValue(SetSpoofedMotherboardSerial, c.values.Motherboard); err != nil {
 		return fmt.Errorf("failed to set spoofed motherboard serial: %w", err)
+	}
+
+	if err := c.SetValue(SetSpoofedMacAddress, c.values.MAC); err != nil {
+		return fmt.Errorf("failed to set spoofed MAC address: %w", err)
+	}
+
+	if err := c.SetValue(SetSpoofedWlanGUID, c.values.WLANGUID); err != nil {
+		return fmt.Errorf("failed to set spoofed WLAN GUID: %w", err)
+	}
+
+	if err := c.SetValue(SetSpoofedBSSID, c.values.BSSID); err != nil {
+		return fmt.Errorf("failed to set spoofed BSSID: %w", err)
 	}
 
 	return nil

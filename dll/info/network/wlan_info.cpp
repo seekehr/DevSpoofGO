@@ -147,6 +147,9 @@ extern "C" {
             size_t converted = 0;
             mbstowcs_s(&converted, g_wlanGuid, sizeof(g_wlanGuid)/sizeof(WCHAR), 
                       normalizedGuid, strlen(normalizedGuid));
+            OutputDebugStringW(L"Spoofed WLAN GUID set to: ");
+            OutputDebugStringW(g_wlanGuid);
+            OutputDebugStringW(L"\n");
         }
     }
 }
@@ -184,7 +187,9 @@ ULONG WINAPI Hooked_GetAdaptersAddresses(ULONG Family, ULONG Flags, PVOID Reserv
         }
         
         // GUID for AdapterName (format: MEOW0F4E-666E-406B-8289-57E05022F3D5)
-        static char hardcodedGuid[] = "MEOW0F4E-666E-406B-8289-57E05022F3D5";
+        char guidStr[64];
+        size_t convertedChars = 0;
+        wcstombs_s(&convertedChars, guidStr, sizeof(guidStr), g_wlanGuid, _TRUNCATE);
         
         static WCHAR bssidDescriptionStr[128];
         static WCHAR bssidInNameStr[128];
@@ -197,7 +202,7 @@ ULONG WINAPI Hooked_GetAdaptersAddresses(ULONG Family, ULONG Flags, PVOID Reserv
                 memcpy(pAdapter->PhysicalAddress, spoofedMac, 6);
                 
                 if (pAdapter->IfType == 71) { // 71 = IEEE 802.11 wireless
-                    pAdapter->AdapterName = hardcodedGuid;
+                    pAdapter->AdapterName = guidStr;
                     
                     pAdapter->FriendlyName = bssidInNameStr;
                     pAdapter->Description = bssidDescriptionStr;

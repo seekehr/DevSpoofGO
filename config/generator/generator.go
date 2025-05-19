@@ -1,6 +1,7 @@
 package config_generator
 
 import (
+	rand2 "crypto/rand"
 	"fmt"
 	"math/rand"
 	"strings"
@@ -109,14 +110,21 @@ func GenerateRandomValues() RandomGeneratedValues {
 	values.MAC = RandomGeneratedValue(strings.Join(macParts, ":"))
 
 	// Generates a standard random UUID (GUID) in lowercase for Wireless LAN
-	values.WLANGUID = RandomGeneratedValue(uuid.New().String())
+	fmt.Println("UUID: " + strings.ToUpper(uuid.New().String()))
+	values.WLANGUID = RandomGeneratedValue(strings.ToUpper(uuid.New().String()))
 
 	// Generates a random BSSID in hyphen-separated hexadecimal format
-	bssidParts := make([]string, 6)
-	for i := range bssidParts {
-		bssidParts[i] = fmt.Sprintf("%02X", r.Intn(256))
+	identifierBytes := make([]byte, 6)
+
+	_, err := rand2.Read(identifierBytes)
+	if err != nil {
+		values.BSSID = "AB:AB:AB:AB:AB:AB"
 	}
-	values.BSSID = RandomGeneratedValue(strings.Join(bssidParts, "-"))
+	hexParts := make([]string, 6)
+	for i, b := range identifierBytes {
+		hexParts[i] = fmt.Sprintf("%02X", b)
+	}
+	values.BSSID = RandomGeneratedValue(strings.Join(hexParts, ":"))
 
 	// Generates a random string mimicking a disk serial number format
 	diskSerialParts := make([]string, 8)
