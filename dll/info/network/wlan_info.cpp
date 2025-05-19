@@ -147,9 +147,6 @@ extern "C" {
             size_t converted = 0;
             mbstowcs_s(&converted, g_wlanGuid, sizeof(g_wlanGuid)/sizeof(WCHAR), 
                       normalizedGuid, strlen(normalizedGuid));
-            OutputDebugStringW(L"Spoofed WLAN GUID set to: ");
-            OutputDebugStringW(g_wlanGuid);
-            OutputDebugStringW(L"\n");
         }
     }
 }
