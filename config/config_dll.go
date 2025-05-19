@@ -33,6 +33,7 @@ const SetSpoofedMacAddress = ConfigValue("SetSpoofedMacAddress")
 const SetSpoofedWlanGUID = ConfigValue("SetSpoofedWlanGUID")
 const SetSpoofedBSSID = ConfigValue("SetSpoofedBSSID")
 const SetSpoofedBiosSerial = ConfigValue("SetSpoofedBiosSerial")
+const SetSpoofedProcessorId = ConfigValue("SetSpoofedProcessorId")
 
 type Config struct {
 	localDll      *syscall.DLL
@@ -65,10 +66,14 @@ func (c *Config) ConfigureDLL() error {
 		return fmt.Errorf("failed to set spoofed motherboard serial: %w", err)
 	}
 
+	if err := c.SetValue(SetSpoofedProcessorId, c.values.ProcessorID); err != nil {
+		return fmt.Errorf("failed to set spoofed processor id: %w", err)
+	}
+
 	if err := c.SetValue(SetSpoofedBiosSerial, c.values.BIOS); err != nil {
 		return fmt.Errorf("failed to set spoofed bios serial: %w", err)
 	}
-	
+
 	if err := c.SetValue(SetSpoofedMacAddress, c.values.MAC); err != nil {
 		return fmt.Errorf("failed to set spoofed MAC address: %w", err)
 	}

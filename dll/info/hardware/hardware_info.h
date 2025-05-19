@@ -1,6 +1,8 @@
 #pragma once
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#include "bios_serial.h"
+#include "processor_id.h"
 
 // --- Function declarations for centralized hooking ---
 

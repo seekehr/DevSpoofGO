@@ -38,3 +38,8 @@
 - GetSystemFirmwareTable
 
 **BIOS serial is spoofed.**
+
+### `info/hardware/processor_id`
+- GetSystemFirmwareTable
+
+**Processor ID is spoofed.**
