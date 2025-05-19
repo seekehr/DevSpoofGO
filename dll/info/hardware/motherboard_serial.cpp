@@ -36,7 +36,6 @@ typedef struct {
 
 #pragma pack(pop)
 
-static const char* Internal_GetOriginalMotherboardSerial();
 const char* ExtractSMBIOSStringMB(const BYTE* stringSection, BYTE index, const BYTE* pEnd);
 const BYTE* FindNextSMBIOSStructureMB(const BYTE* p, const BYTE* pEnd);
 bool FindBaseboardStructureMB(const BYTE* start, const BYTE* end, const BYTE** structStart, BYTE* serialIndex);
@@ -96,64 +95,6 @@ bool FindBaseboardStructureMB(const BYTE* start, const BYTE* end,
         p = FindNextSMBIOSStructureMB(p, end);
     }
     return false;
-}
-
-static const char* Internal_GetOriginalMotherboardSerial() {
-    if (strcmp(g_originalMotherboardSerial, "NOT_FETCHED") != 0 && strcmp(g_originalMotherboardSerial, "") != 0) {
-        return g_originalMotherboardSerial;
-    }
-    if (!Real_GetSystemFirmwareTable_MB) {
-        strcpy_s(g_originalMotherboardSerial, sizeof(g_originalMotherboardSerial), "ERROR_NO_REAL_FUNC");
-        return g_originalMotherboardSerial;
-    }
-    const DWORD signature = 'RSMB';
-    const DWORD id = 0;
-    UINT bufferSize = Real_GetSystemFirmwareTable_MB(signature, id, NULL, 0);
-    if (bufferSize == 0) {
-        strcpy_s(g_originalMotherboardSerial, sizeof(g_originalMotherboardSerial), "ERROR_BUFFER_SIZE");
-        return g_originalMotherboardSerial;
-    }
-    std::vector<BYTE> buffer(bufferSize);
-    UINT result = Real_GetSystemFirmwareTable_MB(signature, id, buffer.data(), bufferSize);
-    if (result == 0) {
-        strcpy_s(g_originalMotherboardSerial, sizeof(g_originalMotherboardSerial), "ERROR_FIRMWARE_TABLE");
-        return g_originalMotherboardSerial;
-    }
-    RawSMBIOSDataMB* pSmbios = reinterpret_cast<RawSMBIOSDataMB*>(buffer.data());
-    if (bufferSize < sizeof(RawSMBIOSDataMB) || result < sizeof(RawSMBIOSDataMB) || pSmbios->Length > bufferSize - offsetof(RawSMBIOSDataMB, SMBIOSTableData)) {
-        strcpy_s(g_originalMotherboardSerial, sizeof(g_originalMotherboardSerial), "ERROR_INVALID_SMBIOS_HDR");
-        return g_originalMotherboardSerial;
-    }
-    const BYTE* tableData = pSmbios->SMBIOSTableData;
-    const BYTE* pEnd = tableData + pSmbios->Length;
-    const BYTE* structStartPtr = nullptr;
-    BYTE serialIdx = 0;
-    if (FindBaseboardStructureMB(tableData, pEnd, &structStartPtr, &serialIdx)) {
-        if (serialIdx == 0) {
-            strcpy_s(g_originalMotherboardSerial, sizeof(g_originalMotherboardSerial), "NO_SERIAL_INDEX");
-        } else {
-            const BYTE* stringSection = structStartPtr + reinterpret_cast<const SMBIOSStructHeaderMB*>(structStartPtr)->Length;
-            if (stringSection >= pEnd) {
-                 strcpy_s(g_originalMotherboardSerial, sizeof(g_originalMotherboardSerial), "ERROR_STRING_SEC_OOB");
-                 return g_originalMotherboardSerial;
-            }
-            const char* serial = ExtractSMBIOSStringMB(stringSection, serialIdx, pEnd);
-            if (serial && serial[0] != '\0') {
-                strcpy_s(g_originalMotherboardSerial, sizeof(g_originalMotherboardSerial), serial);
-            } else {
-                strcpy_s(g_originalMotherboardSerial, sizeof(g_originalMotherboardSerial), "EMPTY_SERIAL");
-            }
-        }
-    } else {
-        strcpy_s(g_originalMotherboardSerial, sizeof(g_originalMotherboardSerial), "NO_BASEBOARD_FOUND");
-    }
-    return g_originalMotherboardSerial;
-}
-
-extern "C" {
-    __declspec(dllexport) const char* GetOriginalMotherboardSerial() {
-        return Internal_GetOriginalMotherboardSerial();
-    }
 }
 
 void SetSpoofedMotherboardSerial(const char* serial) {

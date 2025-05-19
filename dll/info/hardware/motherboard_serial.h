@@ -6,7 +6,6 @@ void ModifySmbiosForMotherboardSerial(PVOID pFirmwareTableBuffer, DWORD BufferSi
 
 extern "C" {
     __declspec(dllexport) void SetSpoofedMotherboardSerial(const char* serial);
-    __declspec(dllexport) const char* GetOriginalMotherboardSerial();
 }
 
 void InitializeMotherboardSerialHooks(PVOID realGetSystemFirmwareTable);

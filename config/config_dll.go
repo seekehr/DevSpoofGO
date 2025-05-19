@@ -36,6 +36,7 @@ const SetSpoofedBiosSerial = ConfigValue("SetSpoofedBiosSerial")
 const SetSpoofedProcessorId = ConfigValue("SetSpoofedProcessorId")
 const SetSpoofedSystemUuid = ConfigValue("SetSpoofedSystemUuid")
 const SetSpoofedDiskSerial = ConfigValue("SetSpoofedDiskSerial")
+const SetSpoofedMachineGuid = ConfigValue("SetSpoofedMachineGuid")
 
 type Config struct {
 	localDll      *syscall.DLL
@@ -96,6 +97,10 @@ func (c *Config) ConfigureDLL() error {
 		return fmt.Errorf("failed to set spoofed disk serial: %w", err)
 	}
 
+	if err := c.SetValue(SetSpoofedMachineGuid, c.values.MachineGUID); err != nil {
+		return fmt.Errorf("failed to set spoofed machine GUID: %w", err)
+	}
+	
 	return nil
 }
 

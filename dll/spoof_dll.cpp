@@ -9,6 +9,7 @@
 #include "info/disk/vol_info.h" // For volume information related functions
 #include "info/os/os_info.h"   // For computer name related functions
 #include "info/hardware/hardware_info.h"      // For centralized hardware serial hooking
+#include "info/hardware/machine_guid.h" // For MachineGuid spoofing
 #include "info/network/wlan_info.h" // For WLAN information related functions
 #include "info/disk/disk_serial.h" // For Disk Serial spoofing and now g_real_DeviceIoControl extern declaration
 
@@ -63,6 +64,10 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason) {
         // Disk Serial hook for DeviceIoControl
         DetourAttach(&(PVOID&)g_real_DeviceIoControl, HookedDeviceIoControlForDiskSerial);
 
+        // MachineGuid hooks
+        DetourAttach(GetOriginalRegQueryValueExWPtr(), Hooked_RegQueryValueExW);
+        DetourAttach(GetOriginalRegGetValueWPtr(), Hooked_RegGetValueW);
+
         // Network information hooks
         DetourAttach(GetRealGetAdaptersInfo(), GetHookedGetAdaptersInfo());
         DetourAttach(GetRealGetAdaptersAddresses(), GetHookedGetAdaptersAddresses());
@@ -108,6 +113,10 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason) {
         
         // Disk Serial hook for DeviceIoControl
         DetourDetach(&(PVOID&)g_real_DeviceIoControl, HookedDeviceIoControlForDiskSerial);
+
+        // MachineGuid hooks
+        DetourDetach(GetOriginalRegQueryValueExWPtr(), Hooked_RegQueryValueExW);
+        DetourDetach(GetOriginalRegGetValueWPtr(), Hooked_RegGetValueW);
 
         // Network information hooks
         DetourDetach(GetRealGetAdaptersInfo(), GetHookedGetAdaptersInfo());
