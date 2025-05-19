@@ -46,6 +46,8 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason) {
         DetourAttach(GetRealGetAdaptersInfo(), GetHookedGetAdaptersInfo());
         DetourAttach(GetRealGetAdaptersAddresses(), GetHookedGetAdaptersAddresses());
         DetourAttach(GetRealWlanEnumInterfaces(), GetHookedWlanEnumInterfaces());
+        DetourAttach(GetRealWlanQueryInterface(), GetHookedWlanQueryInterface());
+        DetourAttach(GetRealWlanGetNetworkBssList(), GetHookedWlanGetNetworkBssList());
 
         // Commit the transaction - this applies the hooks
         LONG error = DetourTransactionCommit();
@@ -87,6 +89,8 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason) {
         DetourDetach(GetRealGetAdaptersInfo(), GetHookedGetAdaptersInfo());
         DetourDetach(GetRealGetAdaptersAddresses(), GetHookedGetAdaptersAddresses());
         DetourDetach(GetRealWlanEnumInterfaces(), GetHookedWlanEnumInterfaces());
+        DetourDetach(GetRealWlanQueryInterface(), GetHookedWlanQueryInterface());
+        DetourDetach(GetRealWlanGetNetworkBssList(), GetHookedWlanGetNetworkBssList());
 
         // Commit the transaction - this removes the hooks
         DetourTransactionCommit();

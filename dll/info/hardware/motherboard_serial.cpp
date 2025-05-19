@@ -1,6 +1,6 @@
 #include <windows.h>
-#include <cstring>    // For strlen, wcscpy_s, mbstowcs_s
-#include <cstdio>     // For sprintf_s
+#include <cstring>    
+#include <cstdio>     
 #include "motherboard_serial.h"
 
 // --- Hardware information related global variables ---
@@ -231,7 +231,6 @@ UINT WINAPI Hooked_GetSystemFirmwareTable(DWORD FirmwareTableProviderSignature,
         pFirmwareTableBuffer != nullptr && 
         BufferSize >= sizeof(RawSMBIOSData)) {
         
-        OutputDebugStringW(L"Processing SMBIOS data for spoofing");
         
         RawSMBIOSData* pSmbios = static_cast<RawSMBIOSData*>(pFirmwareTableBuffer);
         const BYTE* tableData = pSmbios->SMBIOSTableData;
@@ -242,9 +241,6 @@ UINT WINAPI Hooked_GetSystemFirmwareTable(DWORD FirmwareTableProviderSignature,
         BYTE serialIndex = 0;
         
         if (FindBaseboardStructure(tableData, pEnd, &structStart, &serialIndex)) {
-            swprintf_s(debugMsg, _countof(debugMsg), L"Found baseboard structure, serial index: %d", serialIndex);
-            OutputDebugStringW(debugMsg);
-            
             if (serialIndex != 0) {
                 // Find the string section
                 const BYTE* stringSection = structStart + 
@@ -281,9 +277,6 @@ UINT WINAPI Hooked_GetSystemFirmwareTable(DWORD FirmwareTableProviderSignature,
                         tempPtr++;
                     }
                     
-                    swprintf_s(debugMsg, _countof(debugMsg), L"Original serial: '%hs', length: %zu", originalSerial, originalSerialLen);
-                    OutputDebugStringW(debugMsg);
-                    
                     // Only proceed if we have a valid serial string
                     if (originalSerialLen > 0) {
                         // Convert our spoofed serial to ANSI for modification
@@ -292,8 +285,6 @@ UINT WINAPI Hooked_GetSystemFirmwareTable(DWORD FirmwareTableProviderSignature,
                         wcstombs_s(&convertedChars, spoofedSerialA, sizeof(spoofedSerialA), 
                                   g_motherboardSerial, _TRUNCATE);
                         
-                        swprintf_s(debugMsg, _countof(debugMsg), L"Original serial: '%hs', length: %zu", originalSerial, originalSerialLen);
-                        OutputDebugStringW(debugMsg);
                         
                         // Get the length of our spoofed serial
                         size_t spoofedSerialLen = strlen(spoofedSerialA);
@@ -308,7 +299,6 @@ UINT WINAPI Hooked_GetSystemFirmwareTable(DWORD FirmwareTableProviderSignature,
                                 const_cast<BYTE*>(strPtr)[spoofedSerialLen] = 0;
                             }
                             
-                            OutputDebugStringW(L"Successfully spoofed the motherboard serial");
                         } else {
                             swprintf_s(debugMsg, _countof(debugMsg), L"Spoofed serial too long (%zu > %zu)", spoofedSerialLen, originalSerialLen);
                             OutputDebugStringW(debugMsg);
