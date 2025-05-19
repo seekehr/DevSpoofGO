@@ -3,6 +3,7 @@
 #include <windows.h>
 #include "bios_serial.h"
 #include "processor_id.h"
+#include "system_uuid.h"
 
 // --- Function declarations for centralized hooking ---
 

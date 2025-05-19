@@ -15,6 +15,7 @@ add_library(spoof_dll SHARED
     info/hardware/hardware_info.cpp
     info/hardware/bios_serial.cpp
     info/hardware/processor_id.cpp
+    info/hardware/system_uuid.cpp
 )
 
 # Set include directories

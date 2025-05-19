@@ -38,9 +38,8 @@ void SetSpoofedProcessorId(const char* processorIdString) {
         DWORDLONG newId = strtoull(processorIdString, &endPtr, 16);
         if (endPtr != processorIdString && (*endPtr == '\0' || *endPtr == ' ')) {
             g_spoofedProcessorId = newId;
-            // OutputDebugStringA("[ProcessorID] Set new spoofed ID.");
         } else {
-            // OutputDebugStringA("[ProcessorID] Failed to parse processorIdString.");
+            OutputDebugStringA("[ProcessorID] Failed to parse processorIdString.");
         }
     } else {
         g_spoofedProcessorId = 0;
@@ -66,7 +65,6 @@ void ModifySmbiosForProcessorId(PVOID pFirmwareTableBuffer, DWORD BufferSize) {
             if (header->Length >= offsetof(ProcessorInfoStruct, ProcessorID) + sizeof(DWORDLONG)) {
                 ProcessorInfoStruct* procInfo = reinterpret_cast<ProcessorInfoStruct*>(const_cast<BYTE*>(p));
                 procInfo->ProcessorID = g_spoofedProcessorId;
-                // OutputDebugStringW(L"PROCESSOR_ID_SPOOF: Processor ID successfully spoofed in memory.");
             }
         }
         p = FindNextSMBIOSStructure(p, pEnd);

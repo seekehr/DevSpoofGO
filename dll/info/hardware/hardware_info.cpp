@@ -2,6 +2,7 @@
 #include "motherboard_serial.h"
 #include "bios_serial.h"
 #include "processor_id.h"
+#include "system_uuid.h"
 #include <windows.h>
 #include <cstdio>
 
@@ -50,6 +51,8 @@ UINT WINAPI Hooked_GetSystemFirmwareTable_Central(DWORD FirmwareTableProviderSig
 
         ModifySmbiosForProcessorId(pFirmwareTableBuffer, result);
 
+        ModifySmbiosForSystemUuid(pFirmwareTableBuffer, result);
+
     } else {
         if (result > 0 && FirmwareTableProviderSignature == 'RSMB' && pFirmwareTableBuffer != nullptr) {
             if (result > BufferSize) {
@@ -82,6 +85,7 @@ bool InitializeHardwareHooks() {
     InitializeMotherboardSerialHooks(Real_GetSystemFirmwareTable_Original);
     InitializeBiosSerialHooks(Real_GetSystemFirmwareTable_Original);
     InitializeProcessorIdHooks(Real_GetSystemFirmwareTable_Original);
+    InitializeSystemUuidHooks(Real_GetSystemFirmwareTable_Original);
     return true;
 }
 

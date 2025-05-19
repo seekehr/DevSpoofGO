@@ -36,16 +36,12 @@ func GenerateRandomValues() RandomGeneratedValues {
 
 	values := RandomGeneratedValues{}
 
-	// Generates a hostname like PC-012345
 	values.Hostname = RandomGeneratedValue(fmt.Sprintf("PC-%06d", r.Intn(1000000)))
 
-	// Generates a Processor ID in a specific hexadecimal format
 	values.ProcessorID = RandomGeneratedValue(fmt.Sprintf("BFEBFBFF%06X", r.Intn(16777216)))
 
-	// Generates a standard random UUID (GUID) in uppercase
 	values.UUID = RandomGeneratedValue(strings.ToUpper(uuid.New().String()))
 
-	// Generates a random string mimicking a motherboard serial/model format
 	values.Motherboard = RandomGeneratedValue(fmt.Sprintf("%s%d%s%s%s%s%04d%s%sMB",
 		randomChoiceRand(r, []string{"A", "B", "C", "D", "E", "F", "S", "P"}),
 		100+r.Intn(900),
@@ -57,7 +53,6 @@ func GenerateRandomValues() RandomGeneratedValues {
 		randomChoiceRand(r, []string{"F", "G", "H"}),
 		randomChoiceRand(r, []string{"A", "B", "C", "D"})))
 
-	// Generates a random string mimicking a BIOS version format
 	values.BIOS = RandomGeneratedValue(fmt.Sprintf("%s%d%s%s%s%s%04d",
 		randomChoiceRand(r, []string{"A", "B", "C", "D", "E", "F", "S", "P"}),
 		1+r.Intn(9),
@@ -67,7 +62,6 @@ func GenerateRandomValues() RandomGeneratedValues {
 		randomChoiceRand(r, []string{"X", "Y", "Z"}),
 		r.Intn(10000)))
 
-	// Generates a random string mimicking a Windows MachineGuid format
 	values.MachineGUID = RandomGeneratedValue(fmt.Sprintf("%06x%s%s%03x-%04x-%04x-%04x-%06x%02x",
 		r.Intn(16777216),
 		randomChoiceRand(r, []string{"a", "b", "c", "d", "e", "f"}),
@@ -82,20 +76,17 @@ func GenerateRandomValues() RandomGeneratedValues {
 	// Generates the current datetime in YYYYMMDDHHMMSS format
 	values.InstallDate = RandomGeneratedValue(time.Now().Format("20060102150405"))
 
-	// Generates a random string mimicking an OS serial key format
 	values.OSSerial = RandomGeneratedValue(fmt.Sprintf("%05d-%05d-%05d",
 		10000+r.Intn(90000),
 		10000+r.Intn(90000),
 		10000+r.Intn(90000)))
 
-	// Generates a random string mimicking a Windows Security Identifier (SID) format
 	values.SID = RandomGeneratedValue(fmt.Sprintf("S-1-5-21-%d-%d-%d-%d",
 		1000000000+r.Intn(9000000000),
 		1000000000+r.Intn(9000000000),
 		1000000000+r.Intn(9000000000),
 		1000+r.Intn(9000)))
 
-	// Generates a random MAC address in colon-separated hexadecimal format
 	macParts := make([]string, 6)
 	for i := range macParts {
 		macParts[i] = fmt.Sprintf("%02x", r.Intn(256))
@@ -109,11 +100,8 @@ func GenerateRandomValues() RandomGeneratedValues {
 
 	values.MAC = RandomGeneratedValue(strings.Join(macParts, ":"))
 
-	// Generates a standard random UUID (GUID) in lowercase for Wireless LAN
-	fmt.Println("UUID: " + strings.ToUpper(uuid.New().String()))
 	values.WLANGUID = RandomGeneratedValue(strings.ToUpper(uuid.New().String()))
 
-	// Generates a random BSSID in hyphen-separated hexadecimal format
 	identifierBytes := make([]byte, 6)
 
 	_, err := rand2.Read(identifierBytes)
@@ -126,17 +114,14 @@ func GenerateRandomValues() RandomGeneratedValues {
 	}
 	values.BSSID = RandomGeneratedValue(strings.Join(hexParts, ":"))
 
-	// Generates a random string mimicking a disk serial number format
 	diskSerialParts := make([]string, 8)
 	for i := range diskSerialParts {
 		diskSerialParts[i] = fmt.Sprintf("%04X", r.Intn(65536))
 	}
 	values.DiskSerial = RandomGeneratedValue(strings.Join(diskSerialParts, "_") + ".")
 
-	// Generates a random string mimicking a volume serial number
 	values.VolumeSerial = RandomGeneratedValue(fmt.Sprintf("%d", r.Uint32()))
 
-	// Generates a random string mimicking a disk model format
 	values.DiskModel = RandomGeneratedValue(fmt.Sprintf("%s %s %s-%dG",
 		randomStringRand(r, "ABCDEFGHIJKLMNOPQRSTUVWXYZ", 4),
 		randomStringRand(r, "ABCDEFGHIJKLMNOPQRSTUVWXYZ", 2),
