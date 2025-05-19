@@ -17,7 +17,6 @@ type NetworkInfo struct {
 	wlanGUID     string
 	wlanPhysAddr string
 	wlanBSSID    string
-	mac          string
 
 	lock sync.Mutex
 }
@@ -29,7 +28,6 @@ func NewNetworkInfo() *NetworkInfo {
 		wlanGUID:     getWlanGUID(),
 		wlanPhysAddr: getWlanPhysicalAddress(),
 		wlanBSSID:    getWlanBSSID(),
-		mac:          getMacAddress(),
 		lock:         sync.Mutex{},
 	}
 }
@@ -52,10 +50,6 @@ func (n *NetworkInfo) GetWlanPhysicalAddress() string {
 
 func (n *NetworkInfo) GetWlanBSSID() string {
 	return n.wlanBSSID
-}
-
-func (n *NetworkInfo) GetMacAddress() string {
-	return n.mac
 }
 
 func getLocalIP() string {
@@ -154,25 +148,5 @@ func getWlanBSSID() string {
 	}
 
 	logger.Error("Failed to parse WLAN BSSID", nil)
-	return ""
-}
-
-func getMacAddress() string {
-	interfaces, err := net.Interfaces()
-	if err != nil {
-		logger.Error("Failed to get network interfaces", err)
-		return ""
-	}
-	for _, iface := range interfaces {
-		if iface.Flags&net.FlagUp != 0 &&
-			iface.HardwareAddr != nil &&
-			len(iface.HardwareAddr) > 0 &&
-			!strings.HasPrefix(iface.Name, "vEthernet") &&
-			!strings.HasPrefix(iface.Name, "Loopback") {
-			return iface.HardwareAddr.String()
-		}
-	}
-
-	logger.Error("Failed to get MAC address", nil)
 	return ""
 }
