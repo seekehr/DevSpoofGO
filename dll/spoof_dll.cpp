@@ -8,7 +8,7 @@
 #include "detours.h"  // Microsoft Detours library
 #include "info/disk/vol_info.h" // For volume information related functions
 #include "info/os/os_info.h"   // For computer name related functions
-#include "info/hardware/motherboard_serial.h" // For motherboard serial related functions
+#include "info/hardware/hardware_info.h"      // For centralized hardware serial hooking
 #include "info/network/wlan_info.h" // For WLAN information related functions
 
 // --- DLL entry point ---
@@ -21,6 +21,14 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason) {
     if (fdwReason == DLL_PROCESS_ATTACH) {
         // Disable thread library calls to improve performance for simple DLLs
         DisableThreadLibraryCalls(hinstDLL);
+
+        // Initialize hardware hooks (this will get the original GetSystemFirmwareTable address)
+        if (!InitializeHardwareHooks()) {
+            OutputDebugStringW(L"spoof_dll.dll: Failed to initialize hardware hooks. Aborting Detours setup for hardware.");
+            // Decide if you want to proceed with other hooks or abort entirely
+        } else {
+            OutputDebugStringW(L"spoof_dll.dll: Hardware hooks initialized successfully.");
+        }
 
         // DetourRestoreAfterWith is needed if the target process is instrumented by Detours before
         DetourRestoreAfterWith();
@@ -39,8 +47,8 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason) {
         DetourAttach(GetRealGetVolumeInformationA(), GetHookedGetVolumeInformationA());
         DetourAttach(GetRealGetVolumeInformationW(), GetHookedGetVolumeInformationW());
         
-        // Hardware information hooks
-        DetourAttach(GetRealGetSystemFirmwareTable(), GetHookedGetSystemFirmwareTable());
+        // Hardware information hooks (using the centralized hook)
+        DetourAttach(GetRealGetSystemFirmwareTableAddressStore(), GetCentralHookFunctionAddress());
         
         // Network information hooks
         DetourAttach(GetRealGetAdaptersInfo(), GetHookedGetAdaptersInfo());
@@ -82,8 +90,8 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason) {
         DetourDetach(GetRealGetVolumeInformationA(), GetHookedGetVolumeInformationA());
         DetourDetach(GetRealGetVolumeInformationW(), GetHookedGetVolumeInformationW());
         
-        // Hardware information hooks
-        DetourDetach(GetRealGetSystemFirmwareTable(), GetHookedGetSystemFirmwareTable());
+        // Hardware information hooks (using the centralized hook)
+        DetourDetach(GetRealGetSystemFirmwareTableAddressStore(), GetCentralHookFunctionAddress());
         
         // Network information hooks
         DetourDetach(GetRealGetAdaptersInfo(), GetHookedGetAdaptersInfo());
@@ -94,6 +102,9 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason) {
 
         // Commit the transaction - this removes the hooks
         DetourTransactionCommit();
+
+        // Call after detaching all hooks
+        RemoveHardwareHooks();
 
         OutputDebugStringW(L"spoof_dll.dll: Detours detached.\n");
     }

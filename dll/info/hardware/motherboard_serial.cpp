@@ -2,19 +2,18 @@
 #include <cstring>    
 #include <cstdio>     
 #include "motherboard_serial.h"
+#include <vector> // Required for std::vector
 
 // --- Hardware information related global variables ---
-// Store the spoofed motherboard serial number
-WCHAR g_motherboardSerial[256] = L"F122RCX0031FBNC"; // Default valu
+WCHAR g_motherboardSerial[256] = L"F122RCX0031FBNC"; // Default value
+static char g_originalMotherboardSerial[256] = "NOT_FETCHED";
 
 // --- Function pointer to original Windows API function ---
-// Pointer to the original GetSystemFirmwareTable function
-static UINT (WINAPI *Real_GetSystemFirmwareTable)(DWORD, DWORD, PVOID, DWORD) = GetSystemFirmwareTable;
+static UINT (WINAPI *Real_GetSystemFirmwareTable_MB)(DWORD, DWORD, PVOID, DWORD) = nullptr;
 
 // --- SMBIOS structure definitions ---
 #pragma pack(push, 1)
 
-// SMBIOS header structure
 typedef struct {
     BYTE Used20CallingMethod;
     BYTE MajorVersion;
@@ -22,336 +21,266 @@ typedef struct {
     BYTE DmiRevision;
     DWORD Length;
     BYTE SMBIOSTableData[1];
-} RawSMBIOSData;
+} RawSMBIOSDataMB; // Renamed to avoid conflict if included elsewhere
 
-// SMBIOS structure header
 typedef struct {
     BYTE Type;
     BYTE Length;
     WORD Handle;
-} SMBIOSStructHeader;
+} SMBIOSStructHeaderMB;
 
-// SMBIOS Type 2 (Baseboard Information) structure
 typedef struct {
-    SMBIOSStructHeader Header;
+    SMBIOSStructHeaderMB Header;
     BYTE Manufacturer;
     BYTE Product;
     BYTE Version;
-    BYTE SerialNumber;
+    BYTE SerialNumber; // Index of string for baseboard serial number
     // Other fields not needed for this implementation
-} BaseboardInfo;
+} BaseboardInfoMB;
 
 #pragma pack(pop)
 
 // --- Forward declarations ---
-static const char* Internal_GetMotherboardSerial();
+static const char* Internal_GetOriginalMotherboardSerial();
+const char* ExtractSMBIOSStringMB(const BYTE* stringSection, BYTE index, const BYTE* pEnd);
+const BYTE* FindNextSMBIOSStructureMB(const BYTE* p, const BYTE* pEnd);
+bool FindBaseboardStructureMB(const BYTE* start, const BYTE* end, const BYTE** structStart, BYTE* serialIndex);
 
 // --- Helper function to extract a string from SMBIOS data ---
-// Extracts a string at the given index from the string section
-const char* ExtractSMBIOSString(const BYTE* stringSection, BYTE index, const BYTE* pEnd) {
-    static char buffer[256] = {0};
+const char* ExtractSMBIOSStringMB(const BYTE* stringSection, BYTE index, const BYTE* pEnd) {
+    static char buffer[256];
+    memset(buffer, 0, sizeof(buffer));
     
-    if (index == 0) return ""; // No string
+    if (index == 0) return "";
     
-    // Find the Nth string (index)
     const BYTE* strPtr = stringSection;
     for (BYTE i = 1; i < index; i++) {
-        // Skip to next string
         while (strPtr < pEnd && *strPtr != 0) {
             strPtr++;
         }
-        // Skip past null terminator
-        strPtr++;
-        
-        if (strPtr >= pEnd) {
+        if (strPtr < pEnd) { 
+            strPtr++; 
+        } else {
             return ""; // Out of bounds
         }
     }
     
-    // Calculate string length (up to null or end of buffer)
-    size_t maxLen = min(sizeof(buffer)-1, static_cast<size_t>(pEnd - strPtr));
     size_t len = 0;
-    while (len < maxLen && strPtr[len] != 0) {
-        len++;
+    const BYTE* tempPtr = strPtr;
+    while (tempPtr < pEnd && *tempPtr != 0 && len < (sizeof(buffer) - 1)) {
+        buffer[len++] = static_cast<char>(*tempPtr);
+        tempPtr++;
     }
+    buffer[len] = '\0';
     
-    // Copy the string to our buffer
-    if (len > 0) {
-        memcpy(buffer, strPtr, len);
-        buffer[len] = 0; // Ensure null termination
-        return buffer;
-    }
-    
-    return ""; // Empty string
+    return buffer;
 }
 
 // --- Helper function to find next SMBIOS structure ---
-// Returns pointer to next structure or NULL if none found
-const BYTE* FindNextSMBIOSStructure(const BYTE* p, const BYTE* pEnd) {
-    // Skip the fixed part
-    p += reinterpret_cast<const SMBIOSStructHeader*>(p)->Length;
+const BYTE* FindNextSMBIOSStructureMB(const BYTE* p, const BYTE* pEnd) {
+    if (!p || p >= pEnd) return nullptr;
+    const SMBIOSStructHeaderMB* header = reinterpret_cast<const SMBIOSStructHeaderMB*>(p);
+    p += header->Length;
     
-    // Make sure we're still in bounds
-    if (p >= pEnd - 1) return nullptr;
-    
-    // Skip the string-set (find double NULL)
     while (p < pEnd - 1) {
         if (p[0] == 0 && p[1] == 0) {
-            // Found double null, move past it
             return p + 2;
         }
         p++;
     }
-    
-    return nullptr; // No more structures
+    return nullptr;
 }
 
 // --- Helper function to find Type 2 structure ---
-bool FindBaseboardStructure(const BYTE* start, const BYTE* end, 
+bool FindBaseboardStructureMB(const BYTE* start, const BYTE* end, 
                            const BYTE** structStart, BYTE* serialIndex) {
     const BYTE* p = start;
-    
-    while (p < end - 4) { // Need at least header size
-        const SMBIOSStructHeader* header = reinterpret_cast<const SMBIOSStructHeader*>(p);
-        
-        // Check if this is Type 2 (Baseboard)
-        if (header->Type == 2) {
-            // Make sure we have enough data for serial index
-            if (p + 0x07 < end) {
-                *structStart = p;
-                *serialIndex = *(p + 0x07); // Serial number index
-                return true;
+    while (p && p < end && (p + sizeof(SMBIOSStructHeaderMB) <= end)) {
+        const SMBIOSStructHeaderMB* header = reinterpret_cast<const SMBIOSStructHeaderMB*>(p);
+        if (header->Length < sizeof(SMBIOSStructHeaderMB)) return false; // Malformed
+
+        if (header->Type == 2) { // Baseboard (Motherboard) Information
+            const BaseboardInfoMB* bbInfo = reinterpret_cast<const BaseboardInfoMB*>(p);
+            // Ensure structure is large enough for SerialNumber field
+            if (header->Length >= offsetof(BaseboardInfoMB, SerialNumber) + sizeof(bbInfo->SerialNumber)) {
+                 *structStart = p;
+                 *serialIndex = bbInfo->SerialNumber;
+                 return true;
             }
-            break;
         }
-        
-        // Move to next structure
-        p = FindNextSMBIOSStructure(p, end);
-        if (!p) break;
+        p = FindNextSMBIOSStructureMB(p, end);
     }
-    
     return false;
 }
 
 // --- Function to get the original motherboard serial ---
-static const char* Internal_GetMotherboardSerial() {
-    OutputDebugStringW(L"Internal_GetMotherboardSerial called");
-    static char serialBuffer[256] = {0};
+static const char* Internal_GetOriginalMotherboardSerial() {
+    if (strcmp(g_originalMotherboardSerial, "NOT_FETCHED") != 0 && strcmp(g_originalMotherboardSerial, "") != 0) {
+        return g_originalMotherboardSerial;
+    }
+
+    if (!Real_GetSystemFirmwareTable_MB) {
+        strcpy_s(g_originalMotherboardSerial, sizeof(g_originalMotherboardSerial), "ERROR_NO_REAL_FUNC");
+        return g_originalMotherboardSerial;
+    }
+
+    const DWORD signature = 'RSMB';
+    const DWORD id = 0;
     
-    const DWORD signature = 'RSMB'; // SMBIOS
-    const DWORD id = 0;             // Only one table for SMBIOS
-    
-    // First get the required buffer size
-    UINT bufferSize = Real_GetSystemFirmwareTable(signature, id, NULL, 0);
+    UINT bufferSize = Real_GetSystemFirmwareTable_MB(signature, id, NULL, 0);
     if (bufferSize == 0) {
-        return "ERROR_BUFFER_SIZE";
+        strcpy_s(g_originalMotherboardSerial, sizeof(g_originalMotherboardSerial), "ERROR_BUFFER_SIZE");
+        return g_originalMotherboardSerial;
     }
     
-    // Allocate memory for the buffer
-    BYTE* buffer = new BYTE[bufferSize];
-    if (!buffer) {
-        return "ERROR_MEMORY";
-    }
+    std::vector<BYTE> buffer(bufferSize);
     
-    // Get the actual SMBIOS data
-    UINT result = Real_GetSystemFirmwareTable(signature, id, buffer, bufferSize);
+    UINT result = Real_GetSystemFirmwareTable_MB(signature, id, buffer.data(), bufferSize);
     if (result == 0) {
-        delete[] buffer;
-        return "ERROR_FIRMWARE_TABLE";
+        strcpy_s(g_originalMotherboardSerial, sizeof(g_originalMotherboardSerial), "ERROR_FIRMWARE_TABLE");
+        return g_originalMotherboardSerial;
     }
     
-    // Process SMBIOS data
-    RawSMBIOSData* pSmbios = reinterpret_cast<RawSMBIOSData*>(buffer);
+    RawSMBIOSDataMB* pSmbios = reinterpret_cast<RawSMBIOSDataMB*>(buffer.data());
+    if (bufferSize < sizeof(RawSMBIOSDataMB) || result < sizeof(RawSMBIOSDataMB) || pSmbios->Length > bufferSize - offsetof(RawSMBIOSDataMB, SMBIOSTableData)) {
+        strcpy_s(g_originalMotherboardSerial, sizeof(g_originalMotherboardSerial), "ERROR_INVALID_SMBIOS_HDR");
+        return g_originalMotherboardSerial;
+    }
+
     const BYTE* tableData = pSmbios->SMBIOSTableData;
     const BYTE* pEnd = tableData + pSmbios->Length;
     
-    // Find the baseboard structure
-    const BYTE* structStart = nullptr;
-    BYTE serialIndex = 0;
+    const BYTE* structStartPtr = nullptr;
+    BYTE serialIdx = 0;
     
-    if (FindBaseboardStructure(tableData, pEnd, &structStart, &serialIndex)) {
-        if (serialIndex == 0) {
-            strcpy_s(serialBuffer, sizeof(serialBuffer), "NO_SERIAL_INDEX");
+    if (FindBaseboardStructureMB(tableData, pEnd, &structStartPtr, &serialIdx)) {
+        if (serialIdx == 0) {
+            strcpy_s(g_originalMotherboardSerial, sizeof(g_originalMotherboardSerial), "NO_SERIAL_INDEX");
         } else {
-            // Find the string section
-            const BYTE* stringSection = structStart + 
-                reinterpret_cast<const SMBIOSStructHeader*>(structStart)->Length;
-            
-            // Extract the serial number string
-            const char* serial = ExtractSMBIOSString(stringSection, serialIndex, pEnd);
+            const BYTE* stringSection = structStartPtr + reinterpret_cast<const SMBIOSStructHeaderMB*>(structStartPtr)->Length;
+            if (stringSection >= pEnd) {
+                 strcpy_s(g_originalMotherboardSerial, sizeof(g_originalMotherboardSerial), "ERROR_STRING_SEC_OOB");
+                 return g_originalMotherboardSerial;
+            }
+            const char* serial = ExtractSMBIOSStringMB(stringSection, serialIdx, pEnd);
             if (serial && serial[0] != '\0') {
-                strcpy_s(serialBuffer, sizeof(serialBuffer), serial);
+                strcpy_s(g_originalMotherboardSerial, sizeof(g_originalMotherboardSerial), serial);
             } else {
-                strcpy_s(serialBuffer, sizeof(serialBuffer), "EMPTY_SERIAL");
+                strcpy_s(g_originalMotherboardSerial, sizeof(g_originalMotherboardSerial), "EMPTY_SERIAL");
             }
         }
     } else {
-        strcpy_s(serialBuffer, sizeof(serialBuffer), "NO_BASEBOARD_FOUND");
+        strcpy_s(g_originalMotherboardSerial, sizeof(g_originalMotherboardSerial), "NO_BASEBOARD_FOUND");
     }
-    
-    // Clean up
-    delete[] buffer;
-    
-    return serialBuffer;
+        
+    return g_originalMotherboardSerial;
 }
 
 // --- Function for export ---
 extern "C" {
     __declspec(dllexport) const char* GetOriginalMotherboardSerial() {
-        return Internal_GetMotherboardSerial();
+        return Internal_GetOriginalMotherboardSerial();
     }
-}
-
-// --- Hook function for GetSystemFirmwareTable ---
-UINT WINAPI Hooked_GetSystemFirmwareTable(DWORD FirmwareTableProviderSignature, 
-                                           DWORD FirmwareTableID, 
-                                           PVOID pFirmwareTableBuffer, 
-                                           DWORD BufferSize) {
-    // Debug output
-    OutputDebugStringW(L"Hooked_GetSystemFirmwareTable called");
-    
-    // First, call the original function to get the actual data
-    UINT result = Real_GetSystemFirmwareTable(FirmwareTableProviderSignature, 
-                                             FirmwareTableID, 
-                                             pFirmwareTableBuffer, 
-                                             BufferSize);
-    
-    // Debug output the results
-    WCHAR debugMsg[256];
-    swprintf_s(debugMsg, _countof(debugMsg), L"GetSystemFirmwareTable returned %u bytes, signature: %08X", result, FirmwareTableProviderSignature);
-    OutputDebugStringW(debugMsg);
-    
-    // Only modify the data if:
-    // 1. The call was successful
-    // 2. We're looking at SMBIOS data ('RSMB')
-    // 3. We have a buffer to work with
-    // 4. The buffer size is sufficient
-    if (result > 0 && 
-        FirmwareTableProviderSignature == 'RSMB' && 
-        pFirmwareTableBuffer != nullptr && 
-        BufferSize >= sizeof(RawSMBIOSData)) {
-        
-        
-        RawSMBIOSData* pSmbios = static_cast<RawSMBIOSData*>(pFirmwareTableBuffer);
-        const BYTE* tableData = pSmbios->SMBIOSTableData;
-        const BYTE* pEnd = tableData + pSmbios->Length;
-        
-        // Find the baseboard structure
-        const BYTE* structStart = nullptr;
-        BYTE serialIndex = 0;
-        
-        if (FindBaseboardStructure(tableData, pEnd, &structStart, &serialIndex)) {
-            if (serialIndex != 0) {
-                // Find the string section
-                const BYTE* stringSection = structStart + 
-                    reinterpret_cast<const SMBIOSStructHeader*>(structStart)->Length;
-                
-                // Find the string with the given index
-                const BYTE* strPtr = stringSection;
-                bool found = false;
-                
-                for (BYTE i = 1; i < serialIndex; i++) {
-                    // Skip to next string
-                    while (strPtr < pEnd && *strPtr != 0) {
-                        strPtr++;
-                    }
-                    // Skip past null terminator
-                    strPtr++;
-                    
-                    if (strPtr >= pEnd) {
-                        found = true;
-                        break;
-                    }
-                }
-                
-                // If we found the right string position and it's within bounds
-                if (!found && strPtr < pEnd) {
-                    // Get the original serial string
-                    char originalSerial[256] = {0};
-                    size_t originalSerialLen = 0;
-                    const BYTE* tempPtr = strPtr;
-                    while (tempPtr < pEnd && *tempPtr != 0) {
-                        if (originalSerialLen < sizeof(originalSerial) - 1) {
-                            originalSerial[originalSerialLen++] = *tempPtr;
-                        }
-                        tempPtr++;
-                    }
-                    
-                    // Only proceed if we have a valid serial string
-                    if (originalSerialLen > 0) {
-                        // Convert our spoofed serial to ANSI for modification
-                        char spoofedSerialA[256] = {0};
-                        size_t convertedChars = 0;
-                        wcstombs_s(&convertedChars, spoofedSerialA, sizeof(spoofedSerialA), 
-                                  g_motherboardSerial, _TRUNCATE);
-                        
-                        
-                        // Get the length of our spoofed serial
-                        size_t spoofedSerialLen = strlen(spoofedSerialA);
-                        
-                        // Only overwrite if the spoofed serial will fit in the same space
-                        if (spoofedSerialLen <= originalSerialLen) {
-                            // Copy our spoofed serial over the original
-                            memcpy(const_cast<BYTE*>(strPtr), spoofedSerialA, spoofedSerialLen);
-                            
-                            // If our serial is shorter, null-terminate it properly
-                            if (spoofedSerialLen < originalSerialLen) {
-                                const_cast<BYTE*>(strPtr)[spoofedSerialLen] = 0;
-                            }
-                            
-                        } else {
-                            swprintf_s(debugMsg, _countof(debugMsg), L"Spoofed serial too long (%zu > %zu)", spoofedSerialLen, originalSerialLen);
-                            OutputDebugStringW(debugMsg);
-                        }
-                    } else {
-                        OutputDebugStringW(L"Original serial length is 0, can't spoof");
-                    }
-                } else {
-                    OutputDebugStringW(L"Failed to find the serial string in the SMBIOS data");
-                }
-            } else {
-                OutputDebugStringW(L"Serial index is 0, can't locate the serial string");
-            }
-        } else {
-            OutputDebugStringW(L"Could not find baseboard structure in SMBIOS data");
-        }
-    } else {
-        if (result == 0) {
-            OutputDebugStringW(L"GetSystemFirmwareTable returned 0 bytes");
-        } else if (FirmwareTableProviderSignature != 'RSMB') {
-            swprintf_s(debugMsg, L"Not SMBIOS data (signature: %08X)", FirmwareTableProviderSignature);
-            OutputDebugStringW(debugMsg);
-        } else if (pFirmwareTableBuffer == nullptr) {
-            OutputDebugStringW(L"NULL buffer provided");
-        } else if (BufferSize < sizeof(RawSMBIOSData)) {
-            swprintf_s(debugMsg, _countof(debugMsg), L"Buffer too small (%u < %zu)", BufferSize, sizeof(RawSMBIOSData));
-            OutputDebugStringW(debugMsg);
-        }
-    }
-    
-    return result;
 }
 
 // --- Function to set the spoofed motherboard serial ---
 void SetSpoofedMotherboardSerial(const char* serial) {
     if (serial) {
-        // Convert the input ANSI string (char*) to a wide character string (WCHAR*)
-        const size_t len = strlen(serial) + 1; // Include space for null terminator
         size_t converted = 0;
-        // Use mbstowcs_s for secure conversion to WCHAR
-        mbstowcs_s(&converted, g_motherboardSerial, sizeof(g_motherboardSerial) / sizeof(WCHAR), 
-                  serial, len - 1);
-        // mbstowcs_s automatically null-terminates if the source fits.
+        mbstowcs_s(&converted, g_motherboardSerial, sizeof(g_motherboardSerial) / sizeof(WCHAR), serial, _TRUNCATE);
+    } else {
+        g_motherboardSerial[0] = L'\0';
     }
 }
 
-// --- Helper functions for hooking ---
-PVOID* GetRealGetSystemFirmwareTable() {
-    return reinterpret_cast<PVOID*>(&Real_GetSystemFirmwareTable);
+// --- Function to modify SMBIOS data for motherboard serial ---
+void ModifySmbiosForMotherboardSerial(PVOID pFirmwareTableBuffer, DWORD BufferSize) {
+    if (!pFirmwareTableBuffer || BufferSize < sizeof(RawSMBIOSDataMB)) {
+        OutputDebugStringW(L"MB_SPOOF: Invalid buffer or size for modification.");
+        return;
+    }
+
+    RawSMBIOSDataMB* pSmbios = static_cast<RawSMBIOSDataMB*>(pFirmwareTableBuffer);
+    if (pSmbios->Length > BufferSize - offsetof(RawSMBIOSDataMB, SMBIOSTableData)) {
+         OutputDebugStringW(L"MB_SPOOF: SMBIOS length exceeds buffer capacity.");
+         return;
+    }
+
+    const BYTE* tableData = pSmbios->SMBIOSTableData;
+    const BYTE* pEnd = tableData + pSmbios->Length;
+
+    const BYTE* structStartPtr = nullptr;
+    BYTE serialIdx = 0;
+
+    if (FindBaseboardStructureMB(tableData, pEnd, &structStartPtr, &serialIdx)) {
+        if (serialIdx != 0) {
+            const BYTE* stringSectionStart = structStartPtr + 
+                reinterpret_cast<const SMBIOSStructHeaderMB*>(structStartPtr)->Length;
+            if (stringSectionStart >= pEnd) {
+                 OutputDebugStringW(L"MB_SPOOF: String section out of bounds.");
+                 return;
+            }
+
+            BYTE* currentStringPtr = const_cast<BYTE*>(stringSectionStart);
+            for (BYTE i = 1; i < serialIdx; ++i) {
+                while (currentStringPtr < pEnd && *currentStringPtr != 0) {
+                    currentStringPtr++;
+                }
+                if (currentStringPtr < pEnd) { 
+                    currentStringPtr++; 
+                } else { 
+                    OutputDebugStringW(L"MB_SPOOF: Error locating Nth serial string.");
+                    return; 
+                }
+            }
+            if (currentStringPtr >= pEnd) {
+                 OutputDebugStringW(L"MB_SPOOF: Serial string pointer out of bounds before spoofing.");
+                 return;
+            }
+
+            size_t originalSerialLen = 0;
+            const BYTE* tempPtr = currentStringPtr;
+            while (tempPtr < pEnd && *tempPtr != 0) {
+                originalSerialLen++;
+                tempPtr++;
+            }
+
+            if (originalSerialLen > 0) {
+                char spoofedSerialA[256];
+                size_t convertedChars = 0;
+                wcstombs_s(&convertedChars, spoofedSerialA, sizeof(spoofedSerialA), g_motherboardSerial, _TRUNCATE);
+                size_t spoofedSerialLen = strlen(spoofedSerialA);
+
+                if (spoofedSerialLen <= originalSerialLen) {
+                    memcpy(currentStringPtr, spoofedSerialA, spoofedSerialLen);
+                    if (spoofedSerialLen < originalSerialLen) {
+                        currentStringPtr[spoofedSerialLen] = 0; 
+                    }
+                    OutputDebugStringW(L"MB_SPOOF: Motherboard Serial successfully spoofed.");
+                } else {
+                    OutputDebugStringW(L"MB_SPOOF: Spoofed Motherboard serial too long.");
+                }
+            } else {
+                 OutputDebugStringW(L"MB_SPOOF: Original Motherboard serial length is 0.");
+            }
+        } else {
+            OutputDebugStringW(L"MB_SPOOF: Serial index is 0 in SMBIOS Type 2.");
+        }
+    } else {
+        OutputDebugStringW(L"MB_SPOOF: Baseboard (Type 2) structure not found for spoofing.");
+    }
 }
 
-PVOID GetHookedGetSystemFirmwareTable() {
-    return reinterpret_cast<PVOID>(Hooked_GetSystemFirmwareTable);
+
+// --- Function to initialize and store the real function pointer ---
+void InitializeMotherboardSerialHooks(PVOID realGetSystemFirmwareTable) {
+    if (realGetSystemFirmwareTable) {
+        Real_GetSystemFirmwareTable_MB = reinterpret_cast<UINT(WINAPI*)(DWORD, DWORD, PVOID, DWORD)>(realGetSystemFirmwareTable);
+        OutputDebugStringW(L"MB_SPOOF: Real_GetSystemFirmwareTable_MB initialized.");
+        Internal_GetOriginalMotherboardSerial(); // Fetch original serial
+    } else {
+         OutputDebugStringW(L"MB_SPOOF: Attempted to initialize with NULL Real_GetSystemFirmwareTable_MB.");
+    }
 }
 
 // --- Function to get the spoofed motherboard serial for other modules ---

@@ -4,8 +4,8 @@
 
 // --- Function declarations ---
 
-// Hook function
-UINT WINAPI Hooked_GetSystemFirmwareTable(DWORD FirmwareTableProviderSignature, DWORD FirmwareTableID, PVOID pFirmwareTableBuffer, DWORD BufferSize);
+// Function to modify SMBIOS data for motherboard serial
+void ModifySmbiosForMotherboardSerial(PVOID pFirmwareTableBuffer, DWORD BufferSize);
 
 // API for the injector
 extern "C" {
@@ -14,8 +14,11 @@ extern "C" {
 }
 
 // Helper functions for hooking from spoof_dll.cpp
-PVOID* GetRealGetSystemFirmwareTable();
-PVOID GetHookedGetSystemFirmwareTable();
+// PVOID* GetRealGetSystemFirmwareTable();  // To be removed
+// PVOID GetHookedGetSystemFirmwareTable(); // To be removed
+
+// Function to initialize and get the original motherboard serial
+void InitializeMotherboardSerialHooks(PVOID realGetSystemFirmwareTable);
 
 // Access to the spoofed motherboard serial (for other modules if needed)
 const WCHAR* GetSpoofedMotherboardSerial(); 
