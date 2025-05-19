@@ -9,7 +9,6 @@ typedef struct {
     WORD Handle;
 } SMBIOSStructHeader;
 
-// Processor Information (Type 4)
 typedef struct {
     SMBIOSStructHeader Header;
     BYTE SocketDesignation;
@@ -30,20 +29,16 @@ typedef struct {
     BYTE SerialNumber;
     BYTE AssetTag;
     BYTE PartNumber;
-    // Fields below are for SMBIOS 2.5+
     BYTE CoreCount;
     BYTE CoreEnabled;
     BYTE ThreadCount;
     WORD ProcessorCharacteristics;
-    // Fields below are for SMBIOS 2.6+
     WORD ProcessorFamily2;
-    // Fields below are for SMBIOS 3.2+
     WORD CoreCount2;
     WORD CoreEnabled2;
     WORD ThreadCount2;
 } ProcessorInfoStruct;
 #pragma pack(pop)
-
 
 void ModifySmbiosForProcessorId(PVOID pFirmwareTableBuffer, DWORD BufferSize);
 
@@ -52,5 +47,4 @@ extern "C" {
 }
 
 void InitializeProcessorIdHooks(PVOID realGetSystemFirmwareTable);
-
 PVOID* GetRealGetSystemFirmwareTableForProcessorId();

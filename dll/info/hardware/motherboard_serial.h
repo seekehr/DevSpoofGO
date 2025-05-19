@@ -2,8 +2,6 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 
-// --- Function declarations ---
-
 void ModifySmbiosForMotherboardSerial(PVOID pFirmwareTableBuffer, DWORD BufferSize);
 
 extern "C" {
@@ -12,5 +10,4 @@ extern "C" {
 }
 
 void InitializeMotherboardSerialHooks(PVOID realGetSystemFirmwareTable);
-
-const WCHAR* GetSpoofedMotherboardSerial(); 
+const WCHAR* GetSpoofedMotherboardSerial();

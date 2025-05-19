@@ -49,19 +49,15 @@ void SetSpoofedProcessorId(const char* processorIdString) {
 
 void ModifySmbiosForProcessorId(PVOID pFirmwareTableBuffer, DWORD BufferSize) {
     if (!pFirmwareTableBuffer || BufferSize < sizeof(RawSMBIOSDataProcessor)) return;
-
     RawSMBIOSDataProcessor* pSmbios = static_cast<RawSMBIOSDataProcessor*>(pFirmwareTableBuffer);
     if (pSmbios->Length == 0 || pSmbios->Length > BufferSize - offsetof(RawSMBIOSDataProcessor, SMBIOSTableData)) return;
-
     const BYTE* tableData = pSmbios->SMBIOSTableData;
     const BYTE* pEnd = tableData + pSmbios->Length;
     const BYTE* p = tableData;
-
     while (p && p < pEnd && (p + sizeof(SMBIOSStructHeader) <= pEnd)) {
         const SMBIOSStructHeader* header = reinterpret_cast<const SMBIOSStructHeader*>(p);
         if (header->Length < sizeof(SMBIOSStructHeader)) break;
-
-        if (header->Type == 4) { // Processor Information (Type 4)
+        if (header->Type == 4) {
             if (header->Length >= offsetof(ProcessorInfoStruct, ProcessorID) + sizeof(DWORDLONG)) {
                 ProcessorInfoStruct* procInfo = reinterpret_cast<ProcessorInfoStruct*>(const_cast<BYTE*>(p));
                 procInfo->ProcessorID = g_spoofedProcessorId;

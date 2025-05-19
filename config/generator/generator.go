@@ -21,13 +21,11 @@ type RandomGeneratedValues struct {
 	MachineGUID  RandomGeneratedValue `json:"machineguid"`
 	InstallDate  RandomGeneratedValue `json:"installdate"`
 	OSSerial     RandomGeneratedValue `json:"osserial"`
-	SID          RandomGeneratedValue `json:"sid"`
 	MAC          RandomGeneratedValue `json:"mac"`
-	WLANGUID     RandomGeneratedValue `json:"wlanguid"`
+	WlanGUID     RandomGeneratedValue `json:"wlanguid"`
 	BSSID        RandomGeneratedValue `json:"bssid"`
 	DiskSerial   RandomGeneratedValue `json:"diskserial"`
 	VolumeSerial RandomGeneratedValue `json:"volumeserial"`
-	DiskModel    RandomGeneratedValue `json:"diskmodel"`
 }
 
 func GenerateRandomValues() RandomGeneratedValues {
@@ -81,26 +79,18 @@ func GenerateRandomValues() RandomGeneratedValues {
 		10000+r.Intn(90000),
 		10000+r.Intn(90000)))
 
-	values.SID = RandomGeneratedValue(fmt.Sprintf("S-1-5-21-%d-%d-%d-%d",
-		1000000000+r.Intn(9000000000),
-		1000000000+r.Intn(9000000000),
-		1000000000+r.Intn(9000000000),
-		1000+r.Intn(9000)))
-
 	macParts := make([]string, 6)
 	for i := range macParts {
 		macParts[i] = fmt.Sprintf("%02x", r.Intn(256))
 	}
-
 	// Fix the first byte of the MAC address to be a locally administered, unicast address
 	// Set the second least significant bit to 1 (0x02) and clear the least significant bit (0x00)
 	firstByteVal := r.Intn(256)
 	firstByteVal = (firstByteVal & 0xfe) | 0x02 // Clear LSB and set second LSB
 	macParts[0] = fmt.Sprintf("%02x", firstByteVal)
-
 	values.MAC = RandomGeneratedValue(strings.Join(macParts, ":"))
 
-	values.WLANGUID = RandomGeneratedValue(strings.ToUpper(uuid.New().String()))
+	values.WlanGUID = RandomGeneratedValue(strings.ToUpper(uuid.New().String()))
 
 	identifierBytes := make([]byte, 6)
 
@@ -121,12 +111,6 @@ func GenerateRandomValues() RandomGeneratedValues {
 	values.DiskSerial = RandomGeneratedValue(strings.Join(diskSerialParts, "_") + ".")
 
 	values.VolumeSerial = RandomGeneratedValue(fmt.Sprintf("%d", r.Uint32()))
-
-	values.DiskModel = RandomGeneratedValue(fmt.Sprintf("%s %s %s-%dG",
-		randomStringRand(r, "ABCDEFGHIJKLMNOPQRSTUVWXYZ", 4),
-		randomStringRand(r, "ABCDEFGHIJKLMNOPQRSTUVWXYZ", 2),
-		randomStringRand(r, "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", 4),
-		100+r.Intn(900)))
 
 	return values
 }

@@ -34,6 +34,8 @@ const SetSpoofedWlanGUID = ConfigValue("SetSpoofedWlanGUID")
 const SetSpoofedBSSID = ConfigValue("SetSpoofedBSSID")
 const SetSpoofedBiosSerial = ConfigValue("SetSpoofedBiosSerial")
 const SetSpoofedProcessorId = ConfigValue("SetSpoofedProcessorId")
+const SetSpoofedSystemUuid = ConfigValue("SetSpoofedSystemUuid")
+const SetSpoofedDiskSerial = ConfigValue("SetSpoofedDiskSerial")
 
 type Config struct {
 	localDll      *syscall.DLL
@@ -78,12 +80,20 @@ func (c *Config) ConfigureDLL() error {
 		return fmt.Errorf("failed to set spoofed MAC address: %w", err)
 	}
 
-	if err := c.SetValue(SetSpoofedWlanGUID, c.values.WLANGUID); err != nil {
+	if err := c.SetValue(SetSpoofedWlanGUID, c.values.WlanGUID); err != nil {
 		return fmt.Errorf("failed to set spoofed WLAN GUID: %w", err)
 	}
 
 	if err := c.SetValue(SetSpoofedBSSID, c.values.BSSID); err != nil {
 		return fmt.Errorf("failed to set spoofed BSSID: %w", err)
+	}
+
+	if err := c.SetValue(SetSpoofedSystemUuid, c.values.UUID); err != nil {
+		return fmt.Errorf("failed to set spoofed system UUID: %w", err)
+	}
+
+	if err := c.SetValue(SetSpoofedDiskSerial, c.values.DiskSerial); err != nil {
+		return fmt.Errorf("failed to set spoofed disk serial: %w", err)
 	}
 
 	return nil

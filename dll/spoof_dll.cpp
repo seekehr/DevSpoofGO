@@ -10,8 +10,16 @@
 #include "info/os/os_info.h"   // For computer name related functions
 #include "info/hardware/hardware_info.h"      // For centralized hardware serial hooking
 #include "info/network/wlan_info.h" // For WLAN information related functions
+#include "info/disk/disk_serial.h" // For Disk Serial spoofing and now g_real_DeviceIoControl extern declaration
 
 // --- DLL entry point ---
+
+// Definition of the global function pointer for DeviceIoControl trampoline
+BOOL(WINAPI* g_real_DeviceIoControl)(
+    HANDLE hDevice, DWORD dwIoControlCode, LPVOID lpInBuffer, DWORD nInBufferSize,
+    LPVOID lpOutBuffer, DWORD nOutBufferSize, LPDWORD lpBytesReturned, LPOVERLAPPED lpOverlapped
+) = DeviceIoControl; // Initialize with the actual API function address
+
 BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason) {
     // DetourIsHelperProcess is used by Detours internally, return TRUE if it's a helper
     if (DetourIsHelperProcess()) {
@@ -29,6 +37,8 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason) {
         } else {
             OutputDebugStringW(L"spoof_dll.dll: Hardware hooks initialized successfully.");
         }
+
+        OutputDebugStringW(L"spoof_dll.dll: Preparing disk serial hook.");
 
         // DetourRestoreAfterWith is needed if the target process is instrumented by Detours before
         DetourRestoreAfterWith();
@@ -50,6 +60,9 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason) {
         // Hardware information hooks (using the centralized hook)
         DetourAttach(GetRealGetSystemFirmwareTableAddressStore(), GetCentralHookFunctionAddress());
         
+        // Disk Serial hook for DeviceIoControl
+        DetourAttach(&(PVOID&)g_real_DeviceIoControl, HookedDeviceIoControlForDiskSerial);
+
         // Network information hooks
         DetourAttach(GetRealGetAdaptersInfo(), GetHookedGetAdaptersInfo());
         DetourAttach(GetRealGetAdaptersAddresses(), GetHookedGetAdaptersAddresses());
@@ -93,6 +106,9 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason) {
         // Hardware information hooks (using the centralized hook)
         DetourDetach(GetRealGetSystemFirmwareTableAddressStore(), GetCentralHookFunctionAddress());
         
+        // Disk Serial hook for DeviceIoControl
+        DetourDetach(&(PVOID&)g_real_DeviceIoControl, HookedDeviceIoControlForDiskSerial);
+
         // Network information hooks
         DetourDetach(GetRealGetAdaptersInfo(), GetHookedGetAdaptersInfo());
         DetourDetach(GetRealGetAdaptersAddresses(), GetHookedGetAdaptersAddresses());
