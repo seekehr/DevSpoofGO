@@ -95,8 +95,7 @@ void InitializeCertificateSpoofing_Centralized(
 
 const wchar_t* TARGET_LM_CERT_ROOT_PATH = L"SOFTWARE\\Microsoft\\SystemCertificates\\ROOT\\Certificates";
 
-// Helper to return REG_SZ data
-LSTATUS ReturnRegSzData(const std::wstring& strData, LPBYTE lpData, LPDWORD lpcbData, LPDWORD lpType) {
+static LSTATUS ReturnRegSzData(const std::wstring& strData, LPBYTE lpData, LPDWORD lpcbData, LPDWORD lpType) {
     if (lpType) *lpType = REG_SZ;
     DWORD requiredSize = static_cast<DWORD>((strData.length() + 1) * sizeof(wchar_t));
 
@@ -116,8 +115,7 @@ LSTATUS ReturnRegSzData(const std::wstring& strData, LPBYTE lpData, LPDWORD lpcb
     }
 }
 
-// Helper to return REG_BINARY data
-LSTATUS ReturnRegBinaryData(const BYTE* dataPtr, DWORD dataSize, LPBYTE lpData, LPDWORD lpcbData, LPDWORD lpType) {
+static LSTATUS ReturnRegBinaryData(const BYTE* dataPtr, DWORD dataSize, LPBYTE lpData, LPDWORD lpcbData, LPDWORD lpType) {
     if (lpType) *lpType = REG_BINARY;
     if (dataSize == 0 && dataPtr == nullptr) { // Specifically for empty blob
          if (lpcbData) *lpcbData = 0;

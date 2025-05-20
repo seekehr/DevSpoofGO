@@ -20,6 +20,7 @@ add_library(spoof_dll SHARED
     info/reg/certificates_info.cpp
     info/reg/machine_guid.cpp
     info/reg/reg_info.cpp
+    info/reg/current_version.cpp
 )
 
 

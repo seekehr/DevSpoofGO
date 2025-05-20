@@ -1,6 +1,7 @@
 #include "reg_info.h"
 #include "certificates_info.h" // Corrected path
 #include "machine_guid.h"      // Corrected path
+#include "current_version.h"   // Added for CurrentVersion spoofing
 #include <cstdio>              
 
 static LSTATUS (WINAPI *TargetAPI_RegOpenKeyExW)(HKEY, LPCWSTR, DWORD, REGSAM, PHKEY) = nullptr;
@@ -46,6 +47,12 @@ bool InitializeRegistryHooksAndHandlers() {
         reinterpret_cast<PVOID>(TargetAPI_RegQueryValueExW),
         reinterpret_cast<PVOID>(TargetAPI_RegGetValueW)
     );
+    InitializeCurrentVersionSpoofing_Centralized(
+        reinterpret_cast<PVOID>(TargetAPI_RegOpenKeyExW),
+        reinterpret_cast<PVOID>(TargetAPI_RegQueryValueExW),
+        reinterpret_cast<PVOID>(TargetAPI_RegGetValueW),
+        reinterpret_cast<PVOID>(TargetAPI_RegCloseKey)
+    );
 
     OutputDebugStringW(L"REG_INFO: Registry hooks and handlers initialization attempt finished.");
     return success; // Return true if all critical OS API pointers were obtained.
@@ -70,6 +77,10 @@ LSTATUS WINAPI Unified_Hooked_RegOpenKeyExW(HKEY hKey, LPCWSTR lpSubKey, DWORD u
     bool handled = false;
 
     Handle_RegOpenKeyExW_ForCertificates(hKey, lpSubKey, ulOptions, samDesired, phkResult, status, handled, TargetAPI_RegOpenKeyExW);
+    if (handled) return status;
+
+    // Call CurrentVersion handler before falling through to the original API
+    Handle_RegOpenKeyExW_ForCurrentVersion(hKey, lpSubKey, ulOptions, samDesired, phkResult, status, handled, TargetAPI_RegOpenKeyExW);
     if (handled) return status;
 
     if (!TargetAPI_RegOpenKeyExW) return ERROR_CALL_NOT_IMPLEMENTED; 
@@ -102,6 +113,10 @@ LSTATUS WINAPI Unified_Hooked_RegQueryValueExW(HKEY hKey, LPCWSTR lpValueName, L
 
     Handle_RegQueryValueExW_ForMachineGuid(hKey, lpValueName, lpReserved, lpType, lpData, lpcbData, status, handled);
     if (handled) return status;
+
+    // Call CurrentVersion handler
+    Handle_RegQueryValueExW_ForCurrentVersion(hKey, lpValueName, lpReserved, lpType, lpData, lpcbData, status, handled);
+    if (handled) return status;
     
     if (!TargetAPI_RegQueryValueExW) return ERROR_CALL_NOT_IMPLEMENTED;
     return TargetAPI_RegQueryValueExW(hKey, lpValueName, lpReserved, lpType, lpData, lpcbData);
@@ -118,6 +133,10 @@ LSTATUS WINAPI Unified_Hooked_RegGetValueW(HKEY hkey, LPCWSTR lpSubKey, LPCWSTR 
     Handle_RegGetValueW_ForMachineGuid(hkey, lpSubKey, lpValue, dwFlags, pdwType, pvData, pcbData, status, handled);
     if (handled) return status;
 
+    // Call CurrentVersion handler
+    Handle_RegGetValueW_ForCurrentVersion(hkey, lpSubKey, lpValue, dwFlags, pdwType, pvData, pcbData, status, handled);
+    if (handled) return status;
+
     if (!TargetAPI_RegGetValueW) return ERROR_CALL_NOT_IMPLEMENTED;
     return TargetAPI_RegGetValueW(hkey, lpSubKey, lpValue, dwFlags, pdwType, pvData, pcbData);
 }
@@ -128,9 +147,11 @@ LSTATUS WINAPI Unified_Hooked_RegCloseKey(HKEY hKey) {
     bool handled = false;
 
     Handle_RegCloseKey_ForCertificates(hKey, status, handled);
-    // If certificate handler managed the close (e.g. HKEY_SPOOFED_CERT or internal tracking), 
-    // it sets status and handled. We return that. It means the key might not be closed with OS if spoofed.
     if (handled) return status; 
+
+    // Call CurrentVersion handler for bookkeeping, ensure it doesn't prevent original call unless intended
+    Handle_RegCloseKey_ForCurrentVersion(hKey, status, handled);
+    if (handled) return status; // If CurrentVersion handler fully handled it (e.g. a fake key), return. For tracked real keys, it shouldn't set handled=true.
 
     // No MachineGuid handler for RegCloseKey
     if (!TargetAPI_RegCloseKey) return ERROR_CALL_NOT_IMPLEMENTED;
