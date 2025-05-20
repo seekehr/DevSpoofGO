@@ -31,7 +31,30 @@ static std::wstring g_spoofedProductId = L"XXXXX-XXXXX-XXXXX-XXXXX-XXXXX";
 
 
 static PFN_CV_RegOpenKeyExW g_true_original_RegOpenKeyExW_cv_ptr = nullptr;
+static PFN_CV_RegOpenKeyExA g_true_original_RegOpenKeyExA_cv_ptr = nullptr;
 
+// String conversion helpers (suffixed _CV for this module)
+static std::wstring ConvertAnsiToWide_CV(LPCSTR ansiStr) {
+    if (!ansiStr) return L"";
+    int lenA = lstrlenA(ansiStr);
+    if (lenA == 0) return L"";
+    int lenW = MultiByteToWideChar(CP_ACP, 0, ansiStr, lenA, NULL, 0);
+    if (lenW == 0) return L"";
+    std::wstring wideStr(lenW, 0);
+    MultiByteToWideChar(CP_ACP, 0, ansiStr, lenA, &wideStr[0], lenW);
+    return wideStr;
+}
+
+static std::string ConvertWideToAnsi_CV(LPCWSTR wideStr) {
+    if (!wideStr) return "";
+    int lenW = lstrlenW(wideStr);
+    if (lenW == 0) return "";
+    int lenA = WideCharToMultiByte(CP_ACP, 0, wideStr, lenW, NULL, 0, NULL, NULL);
+    if (lenA == 0) return "";
+    std::string ansiStr(lenA, 0);
+    WideCharToMultiByte(CP_ACP, 0, wideStr, lenW, &ansiStr[0], lenA, NULL, NULL);
+    return ansiStr;
+}
 
 // --- Helper Functions ---
 
@@ -160,16 +183,23 @@ void InitializeCurrentVersionSpoofing_Centralized(
     PVOID pTrueOriginalRegOpenKeyExW,
     PVOID pTrueOriginalRegQueryValueExW,
     PVOID pTrueOriginalRegGetValueW,
-    PVOID pTrueOriginalRegCloseKey) 
+    PVOID pTrueOriginalRegCloseKey,
+    PVOID pTrueOriginalRegOpenKeyExA,
+    PVOID pTrueOriginalRegQueryValueExA,
+    PVOID pTrueOriginalRegGetValueA) 
 {
     if (s_current_version_initialized_data) return;
 
-    OutputDebugStringW(L"[CurrentVersion] Initializing CurrentVersion spoofing data...");
+    OutputDebugStringW(L"[CurrentVersion] Initializing CurrentVersion spoofing data (A/W)...");
 
     g_true_original_RegOpenKeyExW_cv_ptr = reinterpret_cast<PFN_CV_RegOpenKeyExW>(pTrueOriginalRegOpenKeyExW);
+    g_true_original_RegOpenKeyExA_cv_ptr = reinterpret_cast<PFN_CV_RegOpenKeyExA>(pTrueOriginalRegOpenKeyExA);
 
     if (!g_true_original_RegOpenKeyExW_cv_ptr) { 
         OutputDebugStringW(L"[CurrentVersion] Warning: True original RegOpenKeyExW pointer is NULL in Data Init.");
+    }
+    if (!g_true_original_RegOpenKeyExA_cv_ptr) {
+        OutputDebugStringA("[CurrentVersion] Warning: True original RegOpenKeyExA pointer is NULL in Data Init.");
     }
 
     g_spoofedInstallDateEpoch = GenerateRandomEpochTimestamp(2022, 2025);
@@ -182,11 +212,12 @@ void InitializeCurrentVersionSpoofing_Centralized(
     OutputDebugStringW(msg);
     
     s_current_version_initialized_data = true;
-    OutputDebugStringW(L"[CurrentVersion] Initialization complete.");
+    OutputDebugStringW(L"[CurrentVersion] Initialization complete (A/W).");
 }
 
 // --- Handler Functions ---
-const wchar_t* TARGET_CV_PATH = L"SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion";
+const wchar_t* TARGET_CV_PATH_W = L"SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion";
+const char*    TARGET_CV_PATH_A =  "SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion";
 
 void Handle_RegOpenKeyExW_ForCurrentVersion(
     HKEY hKey, LPCWSTR lpSubKey, DWORD ulOptions, REGSAM samDesired, PHKEY phkResult,
@@ -200,7 +231,7 @@ void Handle_RegOpenKeyExW_ForCurrentVersion(
 
     bool is_hklm = (hKey == HKEY_LOCAL_MACHINE); 
 
-    if (is_hklm && lpSubKey && PathMatchSpecW(lpSubKey, TARGET_CV_PATH)) {
+    if (is_hklm && lpSubKey && PathMatchSpecW(lpSubKey, TARGET_CV_PATH_W)) {
         wchar_t dbgMsg[512];
         swprintf_s(dbgMsg, L"[CurrentVersion] Handle_RegOpenKeyExW: Intercepted open for %s", lpSubKey);
         OutputDebugStringW(dbgMsg);
@@ -267,7 +298,7 @@ void Handle_RegGetValueW_ForCurrentVersion(
     handled = false;
     if (!s_current_version_initialized_data) return;
 
-    if (hKey == HKEY_LOCAL_MACHINE && lpSubKey && PathMatchSpecW(lpSubKey, TARGET_CV_PATH)) {
+    if (hKey == HKEY_LOCAL_MACHINE && lpSubKey && PathMatchSpecW(lpSubKey, TARGET_CV_PATH_W)) {
         if (lpValue == nullptr) { 
              return; 
         }
@@ -314,5 +345,45 @@ void Handle_RegCloseKey_ForCurrentVersion(
         OutputDebugStringW(dbgMsg);
         g_openCurrentVersionKeyHandles.erase(it);
         return_status = ERROR_SUCCESS; 
+    }
+}
+
+// A Handlers
+void Handle_RegOpenKeyExA_ForCurrentVersion(HKEY hKey, LPCSTR lpSubKey, DWORD ulOptions, REGSAM samDesired, PHKEY phkResult, LSTATUS& return_status, bool& handled, PFN_CV_RegOpenKeyExA original_param) {
+    handled = false;
+    if (!s_current_version_initialized_data || !original_param) return;
+    bool is_hklm = (hKey == HKEY_LOCAL_MACHINE);
+    if (is_hklm && lpSubKey && PathMatchSpecA(lpSubKey, TARGET_CV_PATH_A)) {
+        OutputDebugStringA("[CurrentVersion] Handle_RegOpenKeyExA: Intercepted.");
+        return_status = original_param(hKey, lpSubKey, ulOptions, samDesired, phkResult);
+        if (return_status == ERROR_SUCCESS && phkResult && *phkResult) g_openCurrentVersionKeyHandles.insert(*phkResult);
+        handled = true; return;
+    }
+}
+void Handle_RegQueryValueExA_ForCurrentVersion(HKEY hKey, LPCSTR lpValueName, LPDWORD lpReserved, LPDWORD lpType, LPBYTE lpData, LPDWORD lpcbData, LSTATUS& return_status, bool& handled) {
+    handled = false; if (!s_current_version_initialized_data) return;
+    if (g_openCurrentVersionKeyHandles.count(hKey)) {
+        if (lpValueName == nullptr) { return_status = ERROR_INVALID_PARAMETER; handled = true; return; }
+        OutputDebugStringA(("[CurrentVersion] Handle_RegQueryValueExA for: " + (lpValueName ? std::string(lpValueName) : "<null>")).c_str());
+        std::string ansiProductId = ConvertWideToAnsi_CV(g_spoofedProductId.c_str());
+        if (_stricmp(lpValueName, "DigitalProductId") == 0) { return_status = ReturnRegBinaryData(g_spoofedDigitalProductId, sizeof(g_spoofedDigitalProductId), lpData, lpcbData, lpType); handled = true; }
+        else if (_stricmp(lpValueName, "DigitalProductId4") == 0) { return_status = ReturnRegBinaryData(g_spoofedDigitalProductId4, sizeof(g_spoofedDigitalProductId4), lpData, lpcbData, lpType); handled = true; }
+        else if (_stricmp(lpValueName, "InstallDate") == 0) { return_status = ReturnRegDwordData(g_spoofedInstallDateEpoch, lpData, lpcbData, lpType); handled = true; }
+        else if (_stricmp(lpValueName, "InstallTime") == 0) { return_status = ReturnRegDwordData(g_spoofedInstallTimeEpoch, lpData, lpcbData, lpType); handled = true; }
+        else if (_stricmp(lpValueName, "ProductId") == 0) { return_status = ReturnRegSzData(ConvertAnsiToWide_CV(lpValueName), lpData, lpcbData, lpType); handled = true; }
+    }
+}
+void Handle_RegGetValueA_ForCurrentVersion(HKEY hKey, LPCSTR lpSubKey, LPCSTR lpValue, DWORD dwFlags, LPDWORD pdwType, PVOID pvData, LPDWORD pcbData, LSTATUS& return_status, bool& handled) {
+    handled = false; if (!s_current_version_initialized_data) return;
+    if (hKey == HKEY_LOCAL_MACHINE && lpSubKey && PathMatchSpecA(lpSubKey, TARGET_CV_PATH_A)) {
+        if (lpValue == nullptr) return; 
+        OutputDebugStringA(("[CurrentVersion] Handle_RegGetValueA for val: " + (lpValue ? std::string(lpValue) : "<null>")).c_str());
+        std::string ansiProductId = ConvertWideToAnsi_CV(g_spoofedProductId.c_str());
+        if (_stricmp(lpValue, "DigitalProductId") == 0) { return_status = ReturnRegBinaryData(g_spoofedDigitalProductId, sizeof(g_spoofedDigitalProductId), static_cast<LPBYTE>(pvData), pcbData, pdwType); handled = true; }
+        else if (_stricmp(lpValue, "DigitalProductId4") == 0) { return_status = ReturnRegBinaryData(g_spoofedDigitalProductId4, sizeof(g_spoofedDigitalProductId4), static_cast<LPBYTE>(pvData), pcbData, pdwType); handled = true; }
+        else if (_stricmp(lpValue, "InstallDate") == 0) { return_status = ReturnRegDwordData(g_spoofedInstallDateEpoch, static_cast<LPBYTE>(pvData), pcbData, pdwType); handled = true; }
+        else if (_stricmp(lpValue, "InstallTime") == 0) { return_status = ReturnRegDwordData(g_spoofedInstallTimeEpoch, static_cast<LPBYTE>(pvData), pcbData, pdwType); handled = true; }
+        else if (_stricmp(lpValue, "ProductId") == 0) { return_status = ReturnRegSzData(ConvertAnsiToWide_CV(lpValue), static_cast<LPBYTE>(pvData), pcbData, pdwType); handled = true; }
+        if (handled && return_status == ERROR_MORE_DATA && (dwFlags & RRF_ZEROONFAILURE) && pvData && pcbData && *pcbData > 0) memset(pvData, 0, *pcbData);
     }
 }

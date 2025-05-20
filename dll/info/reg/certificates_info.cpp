@@ -22,6 +22,8 @@ static HKEY g_hKeyRootCerts = NULL;
 static std::set<HKEY> g_openCertRootKeyHandles; // Tracks all open HKEYs for ROOT\\Certificates
 
 static PFN_RegOpenKeyExW g_true_original_RegOpenKeyExW_ptr = nullptr;
+static PFN_RegOpenKeyExA g_true_original_RegOpenKeyExA_ptr = nullptr; 
+// We might need pointers to other original A/W functions if handlers call them directly
 
 static bool s_certificate_spoofing_initialized_data = false;
 
@@ -72,14 +74,23 @@ void InitializeCertificateSpoofing_Centralized(
     PVOID pTrueOriginalRegOpenKeyExW,
     PVOID pTrueOriginalRegEnumKeyExW,
     PVOID pTrueOriginalRegQueryValueExW,
-    PVOID pTrueOriginalRegCloseKey) 
+    PVOID pTrueOriginalRegCloseKey, 
+    PVOID pTrueOriginalRegOpenKeyExA,
+    PVOID pTrueOriginalRegEnumKeyExA,
+    PVOID pTrueOriginalRegQueryValueExA
+) 
 {
     if (s_certificate_spoofing_initialized_data) return;
 
     g_true_original_RegOpenKeyExW_ptr = reinterpret_cast<PFN_RegOpenKeyExW>(pTrueOriginalRegOpenKeyExW);
+    g_true_original_RegOpenKeyExA_ptr = reinterpret_cast<PFN_RegOpenKeyExA>(pTrueOriginalRegOpenKeyExA);
+    // Store other Enum and QueryValue pointers if needed by handlers directly
 
     if (!g_true_original_RegOpenKeyExW_ptr) { 
         OutputDebugStringW(L"[CertSpoof] Warning: True original RegOpenKeyExW pointer is NULL in Data Init.");
+    }
+    if (!g_true_original_RegOpenKeyExA_ptr) { 
+        OutputDebugStringW(L"[CertSpoof] Warning: True original RegOpenKeyExA pointer is NULL in Data Init.");
     }
 
     DateToFileTime(1997, 1, 10, &g_spoofedCertValidFrom);
@@ -95,72 +106,102 @@ void InitializeCertificateSpoofing_Centralized(
 
 const wchar_t* TARGET_LM_CERT_ROOT_PATH = L"SOFTWARE\\Microsoft\\SystemCertificates\\ROOT\\Certificates";
 
+// Helper for ANSI string conversion
+std::wstring ConvertAnsiToWide(LPCSTR ansiStr) {
+    if (!ansiStr) return L"";
+    int lenA = lstrlenA(ansiStr);
+    if (lenA == 0) return L"";
+    int lenW = MultiByteToWideChar(CP_ACP, 0, ansiStr, lenA, NULL, 0);
+    if (lenW == 0) return L"";
+    std::wstring wideStr(lenW, 0);
+    MultiByteToWideChar(CP_ACP, 0, ansiStr, lenA, &wideStr[0], lenW);
+    return wideStr;
+}
+
+std::string ConvertWideToAnsi(LPCWSTR wideStr) {
+    if (!wideStr) return "";
+    int lenW = lstrlenW(wideStr);
+    if (lenW == 0) return "";
+    int lenA = WideCharToMultiByte(CP_ACP, 0, wideStr, lenW, NULL, 0, NULL, NULL);
+    if (lenA == 0) return "";
+    std::string ansiStr(lenA, 0);
+    WideCharToMultiByte(CP_ACP, 0, wideStr, lenW, &ansiStr[0], lenA, NULL, NULL);
+    return ansiStr;
+}
+
+// WIDE CHAR HELPERS (existing)
 static LSTATUS ReturnRegSzData(const std::wstring& strData, LPBYTE lpData, LPDWORD lpcbData, LPDWORD lpType) {
     if (lpType) *lpType = REG_SZ;
     DWORD requiredSize = static_cast<DWORD>((strData.length() + 1) * sizeof(wchar_t));
-
-    if (lpData == NULL) { // Caller is asking for size
+    if (lpData == NULL) { 
         if (lpcbData) *lpcbData = requiredSize;
         return ERROR_SUCCESS;
     }
     if (lpcbData == NULL) return ERROR_INVALID_PARAMETER;
-
-    if (*lpcbData >= requiredSize) { // Buffer is sufficient
+    if (*lpcbData >= requiredSize) { 
         wcscpy_s(reinterpret_cast<wchar_t*>(lpData), *lpcbData / sizeof(wchar_t), strData.c_str());
         *lpcbData = requiredSize;
         return ERROR_SUCCESS;
-    } else { // Buffer too small
+    } else { 
         *lpcbData = requiredSize;
         return ERROR_MORE_DATA;
     }
 }
-
 static LSTATUS ReturnRegBinaryData(const BYTE* dataPtr, DWORD dataSize, LPBYTE lpData, LPDWORD lpcbData, LPDWORD lpType) {
     if (lpType) *lpType = REG_BINARY;
-    if (dataSize == 0 && dataPtr == nullptr) { // Specifically for empty blob
+    if (dataSize == 0 && dataPtr == nullptr) {
          if (lpcbData) *lpcbData = 0;
-         return ERROR_FILE_NOT_FOUND; // Or ERROR_SUCCESS if 0-byte blob is valid scenario to return for query
+         return ERROR_FILE_NOT_FOUND; 
     }
-
     DWORD requiredSize = dataSize;
-
-    if (lpData == NULL) { // Caller is asking for size
+    if (lpData == NULL) { 
         if (lpcbData) *lpcbData = requiredSize;
         return ERROR_SUCCESS;
     }
     if (lpcbData == NULL) return ERROR_INVALID_PARAMETER;
-
-    if (*lpcbData >= requiredSize) { // Buffer is sufficient
+    if (*lpcbData >= requiredSize) { 
         memcpy(lpData, dataPtr, requiredSize);
         *lpcbData = requiredSize;
         return ERROR_SUCCESS;
-    } else { // Buffer too small
+    } else { 
         *lpcbData = requiredSize;
         return ERROR_MORE_DATA;
     }
 }
 
-// --- New Handler Functions ---
+// ANSI CHAR HELPERS (new)
+static LSTATUS ReturnRegSzDataA(const std::string& strData, LPBYTE lpData, LPDWORD lpcbData, LPDWORD lpType) {
+    if (lpType) *lpType = REG_SZ;
+    DWORD requiredSize = static_cast<DWORD>((strData.length() + 1) * sizeof(char));
+    if (lpData == NULL) {
+        if (lpcbData) *lpcbData = requiredSize;
+        return ERROR_SUCCESS;
+    }
+    if (lpcbData == NULL) return ERROR_INVALID_PARAMETER;
+    if (*lpcbData >= requiredSize) {
+        strcpy_s(reinterpret_cast<char*>(lpData), *lpcbData, strData.c_str());
+        *lpcbData = requiredSize;
+        return ERROR_SUCCESS;
+    } else {
+        *lpcbData = requiredSize;
+        return ERROR_MORE_DATA;
+    }
+}
+// ReturnRegBinaryData is identical for A & W as it deals with BYTE*, DWORD
 
+// --- Handler Functions (W versions) ---
 void Handle_RegOpenKeyExW_ForCertificates(
     HKEY hKey, LPCWSTR lpSubKey, DWORD ulOptions, REGSAM samDesired, PHKEY phkResult,
     LSTATUS& return_status, bool& handled,
     PFN_RegOpenKeyExW original_RegOpenKeyExW_param) 
 {
     handled = false;
+    if (!s_certificate_spoofing_initialized_data || !original_RegOpenKeyExW_param) return; 
 
-    if (!s_certificate_spoofing_initialized_data) {
-        return;
-    }
-    if (!original_RegOpenKeyExW_param) { 
-        return; 
-    }
-
-    // Use masked comparison for HKEY_LOCAL_MACHINE
     if (((ULONG_PTR)hKey & 0xFFFFFFFFUL) == ((ULONG_PTR)HKEY_LOCAL_MACHINE & 0xFFFFFFFFUL) && 
         lpSubKey && PathMatchSpecW(lpSubKey, TARGET_LM_CERT_ROOT_PATH)) 
     {
-        OutputDebugStringW(L"[CertSpoof] Handle_RegOpenKeyExW: Intercepted HKLM\\...\\ROOT\\Certificates open (Condition Met with MASKED HKLM comparison).");
+        OutputDebugStringW(L"[CertSpoof] Handle_RegOpenKeyExW: Intercepted HKLM\...\ROOT\Certificates open.");
         return_status = original_RegOpenKeyExW_param(hKey, lpSubKey, ulOptions, samDesired, phkResult);
         if (return_status == ERROR_SUCCESS && phkResult && *phkResult) {
             g_openCertRootKeyHandles.insert(*phkResult);
@@ -172,9 +213,7 @@ void Handle_RegOpenKeyExW_ForCertificates(
     if (g_openCertRootKeyHandles.count(hKey) &&
         lpSubKey && !g_spoofedCertThumbprint.empty() && _wcsicmp(lpSubKey, g_spoofedCertThumbprint.c_str()) == 0)
     {
-        wchar_t msgBuffer[256]; 
-        swprintf_s(msgBuffer, L"[CertSpoof] Handle_RegOpenKeyExW: Intercepted open.");
-        OutputDebugStringW(msgBuffer);
+        OutputDebugStringW(L"[CertSpoof] Handle_RegOpenKeyExW: Intercepted open for spoofed thumbprint.");
         if (phkResult) *phkResult = HKEY_SPOOFED_CERT;
         return_status = ERROR_SUCCESS;
         handled = true;
@@ -188,18 +227,13 @@ void Handle_RegEnumKeyExW_ForCertificates(
     LSTATUS& return_status, bool& handled)
 {
     handled = false;
-
-    if (!s_certificate_spoofing_initialized_data) {
-        return;
-    }
+    if (!s_certificate_spoofing_initialized_data) return;
 
     if (g_openCertRootKeyHandles.count(hKey)) {
         if (dwIndex == 0 && !g_spoofedCertThumbprint.empty()) {
             OutputDebugStringW((L"[CertSpoof] Handle_RegEnumKeyExW: Spoofing for index 0 with thumbprint: " + g_spoofedCertThumbprint).c_str());
             DWORD thumbprintLen = static_cast<DWORD>(g_spoofedCertThumbprint.length());
-            
             if (lpcchName == NULL) { return_status = ERROR_INVALID_PARAMETER; handled = true; return; }
-
             if (lpName != NULL && *lpcchName > thumbprintLen) {
                 wcscpy_s(lpName, *lpcchName, g_spoofedCertThumbprint.c_str());
                 *lpcchName = thumbprintLen;
@@ -231,34 +265,26 @@ void Handle_RegQueryValueExW_ForCertificates(
     LSTATUS& return_status, bool& handled)
 {
     handled = false;
-
-    if (!s_certificate_spoofing_initialized_data) {
-        return;
-    }
+    if (!s_certificate_spoofing_initialized_data) return;
 
     if (hKey == HKEY_SPOOFED_CERT) {
-        if (lpValueName == nullptr) { 
-            return_status = ERROR_INVALID_PARAMETER; 
-            handled = true; 
-            return; 
-        }
-
+        if (lpValueName == nullptr) { return_status = ERROR_INVALID_PARAMETER; handled = true; return; } 
         if (_wcsicmp(lpValueName, L"Blob") == 0) {
-            OutputDebugStringW(L"[CertSpoof] Handle_RegQueryValueExW: Spoofing Blob for HKEY_SPOOFED_CERT.");
+            OutputDebugStringW(L"[CertSpoof] Handle_RegQueryValueExW: Spoofing Blob.");
             return_status = ReturnRegBinaryData(g_spoofedCertBlob.empty() ? nullptr : g_spoofedCertBlob.data(), 
                                        static_cast<DWORD>(g_spoofedCertBlob.size()), lpData, lpcbData, lpType);
         } else if (_wcsicmp(lpValueName, L"Subject Name") == 0 || _wcsicmp(lpValueName, L"Subject") == 0) {
-            OutputDebugStringW(L"[CertSpoof] Handle_RegQueryValueExW: Spoofing Subject Name for HKEY_SPOOFED_CERT.");
+            OutputDebugStringW(L"[CertSpoof] Handle_RegQueryValueExW: Spoofing Subject Name.");
             return_status = ReturnRegSzData(g_spoofedCertSubject, lpData, lpcbData, lpType);
         } else if (_wcsicmp(lpValueName, L"Issuer Name") == 0 || _wcsicmp(lpValueName, L"Issuer") == 0) {
-            OutputDebugStringW(L"[CertSpoof] Handle_RegQueryValueExW: Spoofing Issuer Name for HKEY_SPOOFED_CERT.");
+            OutputDebugStringW(L"[CertSpoof] Handle_RegQueryValueExW: Spoofing Issuer Name.");
             return_status = ReturnRegSzData(g_spoofedCertIssuer, lpData, lpcbData, lpType);
         } else if (_wcsicmp(lpValueName, L"ValidFrom") == 0 || _wcsicmp(lpValueName, L"NotBefore") == 0) {
-            OutputDebugStringW(L"[CertSpoof] Handle_RegQueryValueExW: Spoofing ValidFrom for HKEY_SPOOFED_CERT.");
+            OutputDebugStringW(L"[CertSpoof] Handle_RegQueryValueExW: Spoofing ValidFrom.");
             return_status = ReturnRegBinaryData(reinterpret_cast<const BYTE*>(&g_spoofedCertValidFrom), 
                                        sizeof(g_spoofedCertValidFrom), lpData, lpcbData, lpType);
         } else if (_wcsicmp(lpValueName, L"ValidTo") == 0 || _wcsicmp(lpValueName, L"NotAfter") == 0) {
-            OutputDebugStringW(L"[CertSpoof] Handle_RegQueryValueExW: Spoofing ValidTo for HKEY_SPOOFED_CERT.");
+            OutputDebugStringW(L"[CertSpoof] Handle_RegQueryValueExW: Spoofing ValidTo.");
             return_status = ReturnRegBinaryData(reinterpret_cast<const BYTE*>(&g_spoofedCertValidTo), 
                                        sizeof(g_spoofedCertValidTo), lpData, lpcbData, lpType);
         } else {
@@ -271,15 +297,128 @@ void Handle_RegQueryValueExW_ForCertificates(
     }
 }
 
+// --- Handler Functions (A versions) ---
+void Handle_RegOpenKeyExA_ForCertificates(
+    HKEY hKey, LPCSTR lpSubKey, DWORD ulOptions, REGSAM samDesired, PHKEY phkResult,
+    LSTATUS& return_status, bool& handled,
+    PFN_RegOpenKeyExA original_RegOpenKeyExA_param) 
+{
+    handled = false;
+    if (!s_certificate_spoofing_initialized_data || !original_RegOpenKeyExA_param) return;
+
+    std::wstring wideSubKey = ConvertAnsiToWide(lpSubKey);
+
+    if (((ULONG_PTR)hKey & 0xFFFFFFFFUL) == ((ULONG_PTR)HKEY_LOCAL_MACHINE & 0xFFFFFFFFUL) && 
+        !wideSubKey.empty() && PathMatchSpecW(wideSubKey.c_str(), TARGET_LM_CERT_ROOT_PATH)) 
+    {
+        OutputDebugStringA("[CertSpoof] Handle_RegOpenKeyExA: Intercepted HKLM\...\ROOT\Certificates open.");
+        return_status = original_RegOpenKeyExA_param(hKey, lpSubKey, ulOptions, samDesired, phkResult);
+        if (return_status == ERROR_SUCCESS && phkResult && *phkResult) {
+            g_openCertRootKeyHandles.insert(*phkResult);
+        }
+        handled = true; 
+        return;
+    }
+
+    if (g_openCertRootKeyHandles.count(hKey) &&
+        !wideSubKey.empty() && !g_spoofedCertThumbprint.empty() && _wcsicmp(wideSubKey.c_str(), g_spoofedCertThumbprint.c_str()) == 0)
+    {
+        OutputDebugStringA("[CertSpoof] Handle_RegOpenKeyExA: Intercepted open for spoofed thumbprint.");
+        if (phkResult) *phkResult = HKEY_SPOOFED_CERT;
+        return_status = ERROR_SUCCESS;
+        handled = true;
+        return;
+    }
+}
+
+void Handle_RegEnumKeyExA_ForCertificates(
+    HKEY hKey, DWORD dwIndex, LPSTR lpName, LPDWORD lpcchName, LPDWORD lpReserved, 
+    LPSTR lpClass, LPDWORD lpcchClass, PFILETIME lpftLastWriteTime,
+    LSTATUS& return_status, bool& handled)
+{
+    handled = false;
+    if (!s_certificate_spoofing_initialized_data) return;
+
+    if (g_openCertRootKeyHandles.count(hKey)) {
+        if (dwIndex == 0 && !g_spoofedCertThumbprint.empty()) {
+            OutputDebugStringA("[CertSpoof] Handle_RegEnumKeyExA: Spoofing for index 0.");
+            std::string ansiThumbprint = ConvertWideToAnsi(g_spoofedCertThumbprint.c_str());
+            DWORD thumbprintLen = static_cast<DWORD>(ansiThumbprint.length());
+            if (lpcchName == NULL) { return_status = ERROR_INVALID_PARAMETER; handled = true; return; }
+            if (lpName != NULL && *lpcchName > thumbprintLen) {
+                strcpy_s(lpName, *lpcchName, ansiThumbprint.c_str());
+                *lpcchName = thumbprintLen;
+                if (lpClass && lpcchClass && *lpcchClass > 0) { 
+                    const char* certStoreClassA = "CryptPKIMgrCert"; 
+                    size_t certStoreClassLenA = strlen(certStoreClassA);
+                    if (*lpcchClass > certStoreClassLenA) {
+                         strcpy_s(lpClass, *lpcchClass, certStoreClassA);
+                        *lpcchClass = static_cast<DWORD>(certStoreClassLenA);
+                    } else { *lpcchClass = static_cast<DWORD>(certStoreClassLenA + 1); }
+                }
+                if (lpftLastWriteTime) { DateToFileTime(2000, 1, 1, lpftLastWriteTime); }
+                return_status = ERROR_SUCCESS;
+            } else { 
+                *lpcchName = thumbprintLen + 1; 
+                return_status = ERROR_MORE_DATA;
+            }
+        } else {
+            return_status = ERROR_NO_MORE_ITEMS; 
+        }
+        handled = true;
+        return;
+    }
+}
+
+void Handle_RegQueryValueExA_ForCertificates(
+    HKEY hKey, LPCSTR lpValueName, LPDWORD lpReserved, LPDWORD lpType, 
+    LPBYTE lpData, LPDWORD lpcbData,
+    LSTATUS& return_status, bool& handled)
+{
+    handled = false;
+    if (!s_certificate_spoofing_initialized_data) return;
+
+    if (hKey == HKEY_SPOOFED_CERT) {
+        if (lpValueName == nullptr) { return_status = ERROR_INVALID_PARAMETER; handled = true; return; }
+        std::wstring wideValueName = ConvertAnsiToWide(lpValueName);
+
+        if (_wcsicmp(wideValueName.c_str(), L"Blob") == 0) {
+            OutputDebugStringA("[CertSpoof] Handle_RegQueryValueExA: Spoofing Blob.");
+            return_status = ReturnRegBinaryData(g_spoofedCertBlob.empty() ? nullptr : g_spoofedCertBlob.data(), 
+                                       static_cast<DWORD>(g_spoofedCertBlob.size()), lpData, lpcbData, lpType); // Binary is same for A/W
+        } else if (_wcsicmp(wideValueName.c_str(), L"Subject Name") == 0 || _wcsicmp(wideValueName.c_str(), L"Subject") == 0) {
+            OutputDebugStringA("[CertSpoof] Handle_RegQueryValueExA: Spoofing Subject Name.");
+            return_status = ReturnRegSzDataA(ConvertWideToAnsi(g_spoofedCertSubject.c_str()), lpData, lpcbData, lpType);
+        } else if (_wcsicmp(wideValueName.c_str(), L"Issuer Name") == 0 || _wcsicmp(wideValueName.c_str(), L"Issuer") == 0) {
+            OutputDebugStringA("[CertSpoof] Handle_RegQueryValueExA: Spoofing Issuer Name.");
+            return_status = ReturnRegSzDataA(ConvertWideToAnsi(g_spoofedCertIssuer.c_str()), lpData, lpcbData, lpType);
+        } else if (_wcsicmp(wideValueName.c_str(), L"ValidFrom") == 0 || _wcsicmp(wideValueName.c_str(), L"NotBefore") == 0) {
+            OutputDebugStringA("[CertSpoof] Handle_RegQueryValueExA: Spoofing ValidFrom.");
+            return_status = ReturnRegBinaryData(reinterpret_cast<const BYTE*>(&g_spoofedCertValidFrom), 
+                                       sizeof(g_spoofedCertValidFrom), lpData, lpcbData, lpType); // Binary is same
+        } else if (_wcsicmp(wideValueName.c_str(), L"ValidTo") == 0 || _wcsicmp(wideValueName.c_str(), L"NotAfter") == 0) {
+            OutputDebugStringA("[CertSpoof] Handle_RegQueryValueExA: Spoofing ValidTo.");
+            return_status = ReturnRegBinaryData(reinterpret_cast<const BYTE*>(&g_spoofedCertValidTo), 
+                                       sizeof(g_spoofedCertValidTo), lpData, lpcbData, lpType); // Binary is same
+        } else {
+            char narrowMsg[256];
+            sprintf_s(narrowMsg, "[CertSpoof] Handle_RegQueryValueExA: Value %s not found for HKEY_SPOOFED_CERT.", lpValueName ? lpValueName : "(null)");
+            OutputDebugStringA(narrowMsg);
+            if (lpcbData) *lpcbData = 0;
+            return_status = ERROR_FILE_NOT_FOUND; 
+        }
+        handled = true;
+        return;
+    }
+}
+
+// Common A/W handler
 void Handle_RegCloseKey_ForCertificates(
     HKEY hKey,
     LSTATUS& return_status, bool& handled)
 {
     handled = false;
-
-    if (!s_certificate_spoofing_initialized_data) {
-        return;
-    }
+    if (!s_certificate_spoofing_initialized_data) return;
 
     if (hKey == HKEY_SPOOFED_CERT) {
         OutputDebugStringW(L"[CertSpoof] Handle_RegCloseKey: Intercepted close for HKEY_SPOOFED_CERT.");
@@ -290,9 +429,18 @@ void Handle_RegCloseKey_ForCertificates(
     
     auto it = g_openCertRootKeyHandles.find(hKey);
     if (it != g_openCertRootKeyHandles.end()) {
+        OutputDebugStringW(L"[CertSpoof] Handle_RegCloseKey: Untracking real cert root key handle.");
         g_openCertRootKeyHandles.erase(it);
-        return_status = ERROR_SUCCESS; 
-        handled = true; 
-        return;
+        // For real keys that were tracked, we simply untrack them.
+        // The original RegCloseKey should still be called by the unified hook.
+        // So, handled should remain false or be set to true ONLY if this handler itself called original close.
+        // Let's make it explicit: call original if this module was solely responsible for this HKEY type.
+        // However, current design is that unified hook calls original if no handler sets handled=true.
+        // So, for untracking a *real* key, we should not set handled = true.
+        // The previous logic for this was: handled = true, return_status = ERROR_SUCCESS. This PREVENTED original call.
+        // This was fine for HKEY_SPOOFED_CERT, but for real keys, it was an issue if not closed elsewhere.
+        // Let's correct it: for real keys, only untrack, don't set handled = true.
+        return_status = ERROR_SUCCESS; // Status for this handler's action
+        // handled = false; // Explicitly let original hook proceed with actual close.
     }
 }
