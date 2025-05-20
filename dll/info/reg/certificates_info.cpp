@@ -102,12 +102,13 @@ void InitializeCertificateSpoofing_Centralized(
     }
 
     s_certificate_spoofing_initialized_data = true;
+    OutputDebugStringW(L"[Certs] Init complete (A/W).");
 }
 
 const wchar_t* TARGET_LM_CERT_ROOT_PATH = L"SOFTWARE\\Microsoft\\SystemCertificates\\ROOT\\Certificates";
 
 // Helper for ANSI string conversion
-std::wstring ConvertAnsiToWide(LPCSTR ansiStr) {
+static std::wstring ConvertAnsiToWide(LPCSTR ansiStr) {
     if (!ansiStr) return L"";
     int lenA = lstrlenA(ansiStr);
     if (lenA == 0) return L"";
@@ -201,7 +202,7 @@ void Handle_RegOpenKeyExW_ForCertificates(
     if (((ULONG_PTR)hKey & 0xFFFFFFFFUL) == ((ULONG_PTR)HKEY_LOCAL_MACHINE & 0xFFFFFFFFUL) && 
         lpSubKey && PathMatchSpecW(lpSubKey, TARGET_LM_CERT_ROOT_PATH)) 
     {
-        OutputDebugStringW(L"[CertSpoof] Handle_RegOpenKeyExW: Intercepted HKLM\...\ROOT\Certificates open.");
+        OutputDebugStringW(L"[CertSpoof] Handle_RegOpenKeyExW: Intercepted HKLM\\...\\ROOT\\Certificates open.");
         return_status = original_RegOpenKeyExW_param(hKey, lpSubKey, ulOptions, samDesired, phkResult);
         if (return_status == ERROR_SUCCESS && phkResult && *phkResult) {
             g_openCertRootKeyHandles.insert(*phkResult);
@@ -311,7 +312,7 @@ void Handle_RegOpenKeyExA_ForCertificates(
     if (((ULONG_PTR)hKey & 0xFFFFFFFFUL) == ((ULONG_PTR)HKEY_LOCAL_MACHINE & 0xFFFFFFFFUL) && 
         !wideSubKey.empty() && PathMatchSpecW(wideSubKey.c_str(), TARGET_LM_CERT_ROOT_PATH)) 
     {
-        OutputDebugStringA("[CertSpoof] Handle_RegOpenKeyExA: Intercepted HKLM\...\ROOT\Certificates open.");
+        OutputDebugStringA("[CertSpoof] Handle_RegOpenKeyExA: Intercepted HKLM\\...\\ROOT\\Certificates open.");
         return_status = original_RegOpenKeyExA_param(hKey, lpSubKey, ulOptions, samDesired, phkResult);
         if (return_status == ERROR_SUCCESS && phkResult && *phkResult) {
             g_openCertRootKeyHandles.insert(*phkResult);
@@ -431,16 +432,6 @@ void Handle_RegCloseKey_ForCertificates(
     if (it != g_openCertRootKeyHandles.end()) {
         OutputDebugStringW(L"[CertSpoof] Handle_RegCloseKey: Untracking real cert root key handle.");
         g_openCertRootKeyHandles.erase(it);
-        // For real keys that were tracked, we simply untrack them.
-        // The original RegCloseKey should still be called by the unified hook.
-        // So, handled should remain false or be set to true ONLY if this handler itself called original close.
-        // Let's make it explicit: call original if this module was solely responsible for this HKEY type.
-        // However, current design is that unified hook calls original if no handler sets handled=true.
-        // So, for untracking a *real* key, we should not set handled = true.
-        // The previous logic for this was: handled = true, return_status = ERROR_SUCCESS. This PREVENTED original call.
-        // This was fine for HKEY_SPOOFED_CERT, but for real keys, it was an issue if not closed elsewhere.
-        // Let's correct it: for real keys, only untrack, don't set handled = true.
-        return_status = ERROR_SUCCESS; // Status for this handler's action
-        // handled = false; // Explicitly let original hook proceed with actual close.
+        return_status = ERROR_SUCCESS; 
     }
 }
