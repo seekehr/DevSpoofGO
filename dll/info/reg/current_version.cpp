@@ -226,11 +226,15 @@ void Handle_RegQueryValueExW_ForCurrentVersion(HKEY hKey, LPCWSTR lpValueName, L
         OutputDebugStringW(L"[CV] QueryValueExW: HKEY not tracked, not spoofing.");
     }
 }
-void Handle_RegGetValueW_ForCurrentVersion(HKEY hKey, LPCSTR lpSubKey, LPCSTR lpValue, DWORD dwFlags, LPDWORD pdwType, PVOID pvData, LPDWORD pcbData, LSTATUS& return_status, bool& handled) {
-    handled = false; if (!s_current_version_initialized_data) return;
-    bool isHKLM_GetValue = (((ULONG_PTR)hKey & 0xFFFFFFFF) == ((ULONG_PTR)HKEY_LOCAL_MACHINE & 0xFFFFFFFF));
+void Handle_RegGetValueW_ForCurrentVersion(HKEY hKey, LPCWSTR lpSubKey, LPCWSTR lpValue, DWORD dwFlags, LPDWORD pdwType, PVOID pvData, LPDWORD pcbData, LSTATUS& return_status, bool& handled) {
+    handled = false; 
+    if (!s_current_version_initialized_data) {
+        OutputDebugStringW(L"[CV] GetValueW: Bailed: not initialized.");
+        return;
+    }
 
-    WCHAR debugMsg[512];
+    bool isHKLM_GetValue = (((ULONG_PTR)hKey & 0xFFFFFFFF) == ((ULONG_PTR)HKEY_LOCAL_MACHINE & 0xFFFFFFFF));
+    WCHAR debugMsg[512]; 
 
     if (isHKLM_GetValue && lpSubKey && PathMatchSpecW(lpSubKey, TARGET_CV_PATH_W)) {
         if (lpValue == nullptr) {
@@ -276,7 +280,9 @@ void Handle_RegGetValueW_ForCurrentVersion(HKEY hKey, LPCSTR lpSubKey, LPCSTR lp
             OutputDebugStringW(L"[CV] GetValueW: Applying RRF_ZEROONFAILURE.");
             memset(pvData, 0, *pcbData);
         }
-    } 
+    } else {
+        // Optional logging for conditions not met
+    }
 }
 
 void Handle_RegOpenKeyExA_ForCurrentVersion(HKEY hKey, LPCSTR lpSubKey, DWORD ulOptions, REGSAM samDesired, PHKEY phkResult, LSTATUS& return_status, bool& handled, PFN_CV_RegOpenKeyExA original_param) {
@@ -345,7 +351,7 @@ void Handle_RegQueryValueExA_ForCurrentVersion(HKEY hKey, LPCSTR lpValueName, LP
             handled = true;
             return;
         }
-        OutputDebugStringA(std::string("[CV] QueryValueExA for: ") + (lpValueName ? lpValueName : "<null>") + " (Condition Met)");
+        OutputDebugStringA((std::string("[CV] QueryValueExA for: ") + (lpValueName ? lpValueName : "<null>") + " (Condition Met)").c_str());
         std::string ansiProductId = ConvertWideToAnsi_CV(g_spoofedProductId.c_str());
         if (_stricmp(lpValueName, "DigitalProductId") == 0) { 
             OutputDebugStringA("[CV] QueryValueExA: Spoofing DigitalProductId.");
