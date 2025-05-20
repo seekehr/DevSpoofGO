@@ -17,6 +17,4 @@ Within the `dll/` folder only. I'd create a separate repo for it but I don't wan
 
 # TODO:
 - [ ] Intercept WMI calls too
-- [ ] Update registry values too perhaps (for basic things like pc name at least) and then automatically load the backed up registry once program is terminated for a more seamless experience
-- [ ] Update DLL to include more information (like motherboard serial)
-- [ ] Update DLL to also include other methods like `GetComputerNameA`
+- [ ] Intercept ALL registry calls (like machine_guid) is doing 
