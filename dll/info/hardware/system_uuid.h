@@ -9,6 +9,5 @@ extern "C" {
     __declspec(dllexport) void SetSpoofedSystemUuid(const char* uuidString);
 }
 
-const GUID& GetSpoofedSystemUuid();
 void InitializeSystemUuidHooks(PVOID realGetSystemFirmwareTable);
 PVOID* GetRealGetSystemFirmwareTableForUuid();

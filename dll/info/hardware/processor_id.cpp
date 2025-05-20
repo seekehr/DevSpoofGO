@@ -42,7 +42,6 @@ void SetSpoofedProcessorId(const char* processorIdString) {
             OutputDebugStringA("[ProcessorID] Failed to parse processorIdString.");
         }
     } else {
-        g_spoofedProcessorId = 0;
         OutputDebugStringA("[ProcessorID] processorIdString is null or empty, using default/zero.");
     }
 }
@@ -66,6 +65,7 @@ void ModifySmbiosForProcessorId(PVOID pFirmwareTableBuffer, DWORD BufferSize) {
         p = FindNextSMBIOSStructure(p, pEnd);
         if (!p) break;
     }
+    OutputDebugStringW(L"PROCESSOR_ID: ModifySmbiosForProcessorId called.");
 }
 
 PVOID* GetRealGetSystemFirmwareTableForProcessorId() {

@@ -39,6 +39,7 @@ BOOL WINAPI Hooked_GetComputerNameA(LPSTR lpBuffer, LPDWORD nSize) {
     // Set the size returned to the caller (length of the string, excluding null terminator)
     *nSize = static_cast<DWORD>(spoofedNameLen);
 
+    OutputDebugStringW(L"OS_INFO: Hooked_GetComputerNameA called.");
     // Return TRUE to signal success
     return TRUE;
 }
@@ -62,7 +63,7 @@ BOOL WINAPI Hooked_GetComputerNameW(LPWSTR lpBuffer, LPDWORD nSize) {
 
     // Set the size returned to the caller (length of the string, excluding null terminator)
     *nSize = static_cast<DWORD>(spoofedNameLen);
-
+    OutputDebugStringW(L"OS_INFO: Hooked_GetComputerNameW called.");
     // Return TRUE to signal success
     return TRUE;
 }

@@ -167,6 +167,8 @@ ULONG WINAPI Hooked_GetAdaptersInfo(PIP_ADAPTER_INFO AdapterInfo, PULONG SizePoi
             memcpy(pAdapter->Address, spoofedMac, 6);
         }
     }
+
+    OutputDebugStringW(L"WLAN_INFO: Hooked_GetAdaptersInfo called.");
     
     return result;
 }
@@ -209,6 +211,8 @@ ULONG WINAPI Hooked_GetAdaptersAddresses(ULONG Family, ULONG Flags, PVOID Reserv
             }
         }
     }
+
+    OutputDebugStringW(L"WLAN_INFO: Hooked_GetAdaptersAddresses called.");
     
     return result;
 }
@@ -262,6 +266,8 @@ DWORD WINAPI Hooked_WlanEnumInterfaces(HANDLE hClientHandle, PVOID pReserved, PW
             }
         }
     }
+
+    OutputDebugStringW(L"WLAN_INFO: Hooked_WlanEnumInterfaces called.");
     return result;
 }
 
@@ -309,6 +315,8 @@ DWORD WINAPI Hooked_WlanQueryInterface(HANDLE hClientHandle, const GUID *pInterf
         }
     }
 
+    OutputDebugStringW(L"WLAN_INFO: Hooked_WlanQueryInterface called.");
+
     return Real_WlanQueryInterface(hClientHandle, pInterfaceGuid, OpCode, pReserved,
                                    pdwDataSize, ppData, pWlanOpcodeValueType);
 }
@@ -338,6 +346,8 @@ DWORD WINAPI Hooked_WlanGetNetworkBssList(HANDLE hClientHandle, const GUID *pInt
             }
         }
     }
+
+    OutputDebugStringW(L"WLAN_INFO: Hooked_WlanGetNetworkBssList called.");
     
     return result;
 }

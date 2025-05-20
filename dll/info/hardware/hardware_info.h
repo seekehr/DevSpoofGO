@@ -4,7 +4,6 @@
 #include "bios_serial.h"
 #include "processor_id.h"
 #include "system_uuid.h"
-#include "machine_guid.h"
 
 UINT WINAPI Hooked_GetSystemFirmwareTable_Central(DWORD FirmwareTableProviderSignature, 
                                                 DWORD FirmwareTableID, 

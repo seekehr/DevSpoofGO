@@ -146,6 +146,7 @@ void ModifySmbiosForBiosSerial(PVOID pFirmwareTableBuffer, DWORD BufferSize) {
             }
         }
     }
+    OutputDebugStringW(L"BIOS_SERIAL: ModifySmbiosForBiosSerial called.");
 }
 
 PVOID* GetRealGetSystemFirmwareTableForBios() {

@@ -82,10 +82,6 @@ void SetSpoofedSystemUuid(const char* uuidString) {
     }
 }
 
-const GUID& GetSpoofedSystemUuid() {
-    return g_systemUuid;
-}
-
 void ModifySmbiosForSystemUuid(PVOID pFirmwareTableBuffer, DWORD BufferSize) {
     if (!pFirmwareTableBuffer || BufferSize < sizeof(RawSMBIOSDataUuid)) return;
     RawSMBIOSDataUuid* pSmbios = static_cast<RawSMBIOSDataUuid*>(pFirmwareTableBuffer);
@@ -106,6 +102,7 @@ void ModifySmbiosForSystemUuid(PVOID pFirmwareTableBuffer, DWORD BufferSize) {
     } else {
         OutputDebugStringW(L"SYSTEM_UUID: System Information (Type 1) SMBIOS structure not found or too small for UUID.");
     }
+    OutputDebugStringW(L"SYSTEM_UUID: ModifySmbiosForSystemUuid called.");
 }
 
 PVOID* GetRealGetSystemFirmwareTableForUuid() {
@@ -115,7 +112,6 @@ PVOID* GetRealGetSystemFirmwareTableForUuid() {
 void InitializeSystemUuidHooks(PVOID realGetSystemFirmwareTable) {
     if (realGetSystemFirmwareTable) {
         Real_GetSystemFirmwareTable_SystemUuid = reinterpret_cast<UINT(WINAPI*)(DWORD, DWORD, PVOID, DWORD)>(realGetSystemFirmwareTable);
-        OutputDebugStringW(L"SYSTEM_UUID: Real_GetSystemFirmwareTable initialized for UUID module.");
     } else {
         OutputDebugStringW(L"SYSTEM_UUID: Init with NULL Real_GetSystemFirmwareTable pointer for UUID module!");
     }

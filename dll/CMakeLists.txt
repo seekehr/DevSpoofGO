@@ -17,8 +17,11 @@ add_library(spoof_dll SHARED
     info/hardware/processor_id.cpp
     info/hardware/system_uuid.cpp
     info/disk/disk_serial.cpp
-    info/hardware/machine_guid.cpp
+    info/reg/certificates_info.cpp
+    info/reg/machine_guid.cpp
+    info/reg/reg_info.cpp
 )
+
 
 # Set include directories
 target_include_directories(spoof_dll PRIVATE

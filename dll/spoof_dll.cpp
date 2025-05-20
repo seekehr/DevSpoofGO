@@ -9,7 +9,7 @@
 #include "info/disk/vol_info.h" // For volume information related functions
 #include "info/os/os_info.h"   // For computer name related functions
 #include "info/hardware/hardware_info.h"      // For centralized hardware serial hooking
-#include "info/hardware/machine_guid.h" // For MachineGuid spoofing
+#include "info/reg/reg_info.h" // Centralized registry hooks 
 #include "info/network/wlan_info.h" // For WLAN information related functions
 #include "info/disk/disk_serial.h" // For Disk Serial spoofing and now g_real_DeviceIoControl extern declaration
 
@@ -28,20 +28,22 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason) {
     }
 
     if (fdwReason == DLL_PROCESS_ATTACH) {
-        // Disable thread library calls to improve performance for simple DLLs
         DisableThreadLibraryCalls(hinstDLL);
 
-        // Initialize hardware hooks (this will get the original GetSystemFirmwareTable address)
+        LoadLibraryW(L"iphlpapi.dll");
+        LoadLibraryW(L"wlanapi.dll");
+
         if (!InitializeHardwareHooks()) {
-            OutputDebugStringW(L"spoof_dll.dll: Failed to initialize hardware hooks. Aborting Detours setup for hardware.");
-            // Decide if you want to proceed with other hooks or abort entirely
-        } else {
-            OutputDebugStringW(L"spoof_dll.dll: Hardware hooks initialized successfully.");
+            OutputDebugStringW(L"spoof_dll.dll: Failed to initialize hardware hooks.");
         }
 
-        OutputDebugStringW(L"spoof_dll.dll: Preparing disk serial hook.");
+        // Initialize Registry Hooks (MachineGuid, Certificates)
+        if (!InitializeRegistryHooksAndHandlers()) { // Centralized registry hook and handler initialization
+            OutputDebugStringW(L"spoof_dll.dll: Failed to initialize registry hooks/handlers.");
+        } else {
+            OutputDebugStringW(L"spoof_dll.dll: Registry hooks/handlers initialized.");
+        }
 
-        // DetourRestoreAfterWith is needed if the target process is instrumented by Detours before
         DetourRestoreAfterWith();
 
         // Begin Detours transaction to apply hooks atomically
@@ -64,30 +66,26 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason) {
         // Disk Serial hook for DeviceIoControl
         DetourAttach(&(PVOID&)g_real_DeviceIoControl, HookedDeviceIoControlForDiskSerial);
 
-        // MachineGuid hooks
-        DetourAttach(GetOriginalRegQueryValueExWPtr(), Hooked_RegQueryValueExW);
-        DetourAttach(GetOriginalRegGetValueWPtr(), Hooked_RegGetValueW);
+        DetourAttach(GetOriginal_RegOpenKeyExW(), Unified_Hooked_RegOpenKeyExW);
+        DetourAttach(GetOriginal_RegEnumKeyExW(), Unified_Hooked_RegEnumKeyExW);
+        DetourAttach(GetOriginal_RegQueryValueExW(), Unified_Hooked_RegQueryValueExW);
+        DetourAttach(GetOriginal_RegGetValueW(), Unified_Hooked_RegGetValueW);
+        DetourAttach(GetOriginal_RegCloseKey(), Unified_Hooked_RegCloseKey);
 
-        // Network information hooks
         DetourAttach(GetRealGetAdaptersInfo(), GetHookedGetAdaptersInfo());
         DetourAttach(GetRealGetAdaptersAddresses(), GetHookedGetAdaptersAddresses());
         DetourAttach(GetRealWlanEnumInterfaces(), GetHookedWlanEnumInterfaces());
         DetourAttach(GetRealWlanQueryInterface(), GetHookedWlanQueryInterface());
         DetourAttach(GetRealWlanGetNetworkBssList(), GetHookedWlanGetNetworkBssList());
 
-        // Commit the transaction - this applies the hooks
         LONG error = DetourTransactionCommit();
 
         // --- Check for errors and log ---
         if (error != NO_ERROR) {
-            // Hook attachment failed! Log the error code.
             WCHAR debugMsg[256];
-            swprintf_s(debugMsg, L"spoof_dll.dll: Detours attach failed with error: %d (Error code %d)\n", error, GetLastError());
+            swprintf_s(debugMsg, L"spoof_dll.dll: Detours attach failed with error: %d (OS Error: %d)\n", error, GetLastError());
             OutputDebugStringW(debugMsg);
-            // In a real scenario, you might want to handle this more robustly,
-            // potentially preventing the DLL from fully initializing or informing the user.
         } else {
-            // Hook attachment succeeded
             OutputDebugStringW(L"spoof_dll.dll: Detours attached successfully!\n");
         }
 
@@ -114,9 +112,12 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason) {
         // Disk Serial hook for DeviceIoControl
         DetourDetach(&(PVOID&)g_real_DeviceIoControl, HookedDeviceIoControlForDiskSerial);
 
-        // MachineGuid hooks
-        DetourDetach(GetOriginalRegQueryValueExWPtr(), Hooked_RegQueryValueExW);
-        DetourDetach(GetOriginalRegGetValueWPtr(), Hooked_RegGetValueW);
+        // Unified Registry Hooks (using new GetOriginal_ prefix)
+        DetourDetach(GetOriginal_RegOpenKeyExW(), Unified_Hooked_RegOpenKeyExW);
+        DetourDetach(GetOriginal_RegEnumKeyExW(), Unified_Hooked_RegEnumKeyExW);
+        DetourDetach(GetOriginal_RegQueryValueExW(), Unified_Hooked_RegQueryValueExW);
+        DetourDetach(GetOriginal_RegGetValueW(), Unified_Hooked_RegGetValueW);
+        DetourDetach(GetOriginal_RegCloseKey(), Unified_Hooked_RegCloseKey);
 
         // Network information hooks
         DetourDetach(GetRealGetAdaptersInfo(), GetHookedGetAdaptersInfo());
@@ -128,11 +129,11 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason) {
         // Commit the transaction - this removes the hooks
         DetourTransactionCommit();
 
-        // Call after detaching all hooks
         RemoveHardwareHooks();
+        RemoveRegistryHooksAndHandlers(); // Cleanup registry hooks/handlers states
 
         OutputDebugStringW(L"spoof_dll.dll: Detours detached.\n");
     }
 
-    return TRUE; // Return TRUE to indicate success
+    return TRUE; 
 }

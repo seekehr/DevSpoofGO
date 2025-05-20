@@ -164,6 +164,7 @@ void ModifySmbiosForMotherboardSerial(PVOID pFirmwareTableBuffer, DWORD BufferSi
             }
         }
     }
+    OutputDebugStringW(L"MB_SPOOF: ModifySmbiosForMotherboardSerial called.");
 }
 
 void InitializeMotherboardSerialHooks(PVOID realGetSystemFirmwareTable) {
