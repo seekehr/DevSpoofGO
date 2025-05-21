@@ -1,5 +1,5 @@
 # DevSpoofGO (x64)
-A device spoofer that injects your desired application with the spoofed credentials, made using GoLang.
+A device spoofer that injects your desired application with the spoofed credentials, made using C++ (dll) and GoLang (injector).
 
 Sister repo (for testing): https://github.com/seekehr/DevSpoofGOTest
 ## How It Works
