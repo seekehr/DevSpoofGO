@@ -251,7 +251,6 @@ HRESULT WINAPI Hooked_CoCreateInstance_For_Locator(
 }
 
 BOOL InitializeWMIHooks() {
-    InitializeBiosSerialWMIModule(); 
 
     g_real_CoCreateInstance = (RealCoCreateInstanceType)DetourFindFunction("ole32.dll", "CoCreateInstance");
     if (!g_real_CoCreateInstance) {
@@ -307,7 +306,5 @@ void CleanupWMIHooks() {
         DetourTransactionCommit();
         g_real_CreateInstanceEnum = nullptr;
     }
-    
-    CleanupBiosSerialWMIModule(); 
-    OutputDebugStringW(L"[WMI_HANDLER] WMI hooks cleaned up.\n");
+
 }

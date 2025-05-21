@@ -4,7 +4,7 @@
 #include <vector>
 #include <cstdio>
 #include <cstdlib>
-#include <wchar.h> // For wcscmp, wcscpy_s
+#include <wchar.h> 
 
 static std::wstring g_spoofedMachineGuid = L"00000000-0000-0000-0000-000000000000";
 static bool s_machine_guid_initialized_data = false;
@@ -68,14 +68,6 @@ void Handle_RegQueryValueExW_ForMachineGuid(
 {
     handled = false;
     if (!s_machine_guid_initialized_data) return;
-
-    // Key HKEY_LOCAL_MACHINE (0x80000002) and subkey SOFTWARE\Microsoft\Cryptography is typically
-    // checked by the calling function (e.g. RegQueryValueExW in reg_info.cpp) before dispatching here,
-    // or this handler needs to be more specific about which hKey it acts upon if it's generic.
-    // For MachineGuid, it's often a specific path that applications query.
-    // Assuming for now that reg_info.cpp's Hooked_RegQueryValueExW filters for the relevant hKey and path before calling this.
-    // If this handler is called for *any* RegQueryValueExW, it needs to be more defensive.
-    // For now, we just check the value name, common for direct MachineGuid queries.
 
     if (lpValueName && wcscmp(lpValueName, L"MachineGuid") == 0) {
         // This is a common scenario where MachineGuid is read directly if the key is already open.
