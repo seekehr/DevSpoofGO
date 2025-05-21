@@ -1,104 +1,135 @@
 #include <windows.h>
-#include <cstring>    // For strlen, wcscpy_s, mbstowcs_s
+#include <cstring>    
 #include "os_info.h"
+#include <string>
+#include <lmcons.h> 
+#include <cstdio>   
+#include "../../detours/include/detours.h"
 
-// --- OS information related global variables ---
-// Use WCHAR for the spoofed computer name as we are hooking GetComputerNameW
-WCHAR g_computerNameW[256] = L"SPOOFED-PC-DEFAULT"; // Default value
+static std::wstring g_spoofedComputerName = L"SPOOFED_PC";
 
-// --- Function pointers to original Windows API functions ---
-// Pointer to the original GetComputerNameA function
-static BOOL (WINAPI *Real_GetComputerNameA)(LPSTR, LPDWORD) = GetComputerNameA;
-// Pointer to the original GetComputerNameW function
-static BOOL (WINAPI *Real_GetComputerNameW)(LPWSTR, LPDWORD) = GetComputerNameW;
+// Initialize function pointers to the real Windows API functions
+BOOL (WINAPI *Real_GetComputerNameW)(LPWSTR lpBuffer, LPDWORD nSize) = GetComputerNameW;
+BOOL (WINAPI *Real_GetComputerNameExW)(COMPUTER_NAME_FORMAT NameType, LPWSTR lpBuffer, LPDWORD nSize) = GetComputerNameExW;
 
-// --- Hook functions ---
 
-// Hook function for GetComputerNameA - takes and returns ANSI characters
-BOOL WINAPI Hooked_GetComputerNameA(LPSTR lpBuffer, LPDWORD nSize) {
-    // First, we need to convert our Unicode computer name to ANSI
-    char ansiName[256];
-    size_t convertedChars = 0;
-    wcstombs_s(&convertedChars, ansiName, sizeof(ansiName), g_computerNameW, _TRUNCATE);
-
-    // Calculate the length of the spoofed name (excluding null terminator)
-    size_t spoofedNameLen = strlen(ansiName);
-    // Calculate the required buffer size (including null terminator)
-    size_t requiredSize = spoofedNameLen + 1;
-
-    // Check if the provided buffer is large enough
-    if (*nSize < requiredSize) {
-        *nSize = static_cast<DWORD>(requiredSize); // Set the required size
-        SetLastError(ERROR_BUFFER_OVERFLOW); // Indicate buffer overflow
-        return FALSE; // Return FALSE to signal failure
-    }
-
-    // Copy the spoofed name to the output buffer
-    strcpy_s(lpBuffer, *nSize, ansiName); // Use secure character copy
-
-    // Set the size returned to the caller (length of the string, excluding null terminator)
-    *nSize = static_cast<DWORD>(spoofedNameLen);
-
-    OutputDebugStringW(L"OS_INFO: Hooked_GetComputerNameA called.");
-    // Return TRUE to signal success
-    return TRUE;
-}
-
-// Hook function for GetComputerNameW - takes and returns wide characters (LPWSTR)
 BOOL WINAPI Hooked_GetComputerNameW(LPWSTR lpBuffer, LPDWORD nSize) {
-    // Calculate the length of the spoofed name (excluding null terminator)
-    size_t spoofedNameLen = wcslen(g_computerNameW);
-    // Calculate the required buffer size (including null terminator)
-    size_t requiredSize = spoofedNameLen + 1;
-
-    // Check if the provided buffer is large enough
-    if (*nSize < requiredSize) {
-        *nSize = static_cast<DWORD>(requiredSize); // Set the required size
-        SetLastError(ERROR_BUFFER_OVERFLOW); // Indicate buffer overflow
-        return FALSE; // Return FALSE to signal failure
+    OutputDebugStringW(L"Hooked_GetComputerNameW called");
+    if (nSize == NULL || lpBuffer == NULL) {
+        return FALSE; // Invalid arguments
     }
 
-    // Copy the spoofed name to the output buffer
-    wcscpy_s(lpBuffer, *nSize, g_computerNameW); // Use secure wide-character copy
-
-    // Set the size returned to the caller (length of the string, excluding null terminator)
-    *nSize = static_cast<DWORD>(spoofedNameLen);
-    OutputDebugStringW(L"OS_INFO: Hooked_GetComputerNameW called.");
-    // Return TRUE to signal success
-    return TRUE;
-}
-
-// Function to set the spoofed computer name
-void SetSpoofedComputerName(const char* name) {
-    if (name) {
-        // Convert the input ANSI string (char*) to a wide character string (WCHAR*)
-        const size_t len = strlen(name) + 1; // Include space for null terminator
-        size_t converted = 0;
-        // Use mbstowcs_s for secure conversion to WCHAR
-        mbstowcs_s(&converted, g_computerNameW, sizeof(g_computerNameW) / sizeof(WCHAR), name, len - 1);
-        // mbstowcs_s automatically null-terminates if the source fits.
+    size_t spoofedNameLen = g_spoofedComputerName.length();
+    if (*nSize > spoofedNameLen) {
+        wcscpy_s(lpBuffer, *nSize, g_spoofedComputerName.c_str());
+        *nSize = (DWORD)spoofedNameLen;
+        return TRUE;
+    } else {
+        *nSize = (DWORD)(spoofedNameLen + 1); // +1 for null terminator
+        SetLastError(ERROR_BUFFER_OVERFLOW);
+        return FALSE;
     }
 }
 
-// Function to get pointers to the original functions for hooking
-PVOID* GetRealGetComputerNameA() {
-    return reinterpret_cast<PVOID*>(&Real_GetComputerNameA);
+BOOL WINAPI Hooked_GetComputerNameExW(COMPUTER_NAME_FORMAT NameType, LPWSTR lpBuffer, LPDWORD nSize) {
+    switch (NameType) {
+        case ComputerNameNetBIOS:
+        case ComputerNameDnsHostname:
+        case ComputerNameDnsDomain: // May also want to spoof domain if desired
+        case ComputerNameDnsFullyQualified:
+        case ComputerNamePhysicalNetBIOS:
+        case ComputerNamePhysicalDnsHostname:
+        case ComputerNamePhysicalDnsDomain:
+        case ComputerNamePhysicalDnsFullyQualified: {
+            if (nSize == NULL || lpBuffer == NULL) {
+                return FALSE; // Invalid arguments
+            }
+            size_t spoofedNameLen = g_spoofedComputerName.length();
+            if (NameType == ComputerNameDnsFullyQualified || NameType == ComputerNamePhysicalDnsFullyQualified) {
+                std::wstring qualifiedName = g_spoofedComputerName + L".spoofdomain.local";
+                spoofedNameLen = qualifiedName.length();
+                if (*nSize > spoofedNameLen) {
+                    wcscpy_s(lpBuffer, *nSize, qualifiedName.c_str());
+                    *nSize = (DWORD)spoofedNameLen;
+                    return TRUE;
+                } else {
+                    *nSize = (DWORD)(spoofedNameLen + 1);
+                    SetLastError(ERROR_BUFFER_OVERFLOW);
+                    return FALSE;
+                }
+            } else {
+                 if (*nSize > spoofedNameLen) {
+                    wcscpy_s(lpBuffer, *nSize, g_spoofedComputerName.c_str());
+                    *nSize = (DWORD)spoofedNameLen;
+                    return TRUE;
+                } else {
+                    *nSize = (DWORD)(spoofedNameLen + 1);
+                    SetLastError(ERROR_BUFFER_OVERFLOW);
+                    return FALSE;
+                }
+            }
+        }
+        default:
+            // Call the original function for other name types we don't explicitly spoof
+            return Real_GetComputerNameExW(NameType, lpBuffer, nSize);
+    }
 }
 
-PVOID* GetRealGetComputerNameW() {
-    return reinterpret_cast<PVOID*>(&Real_GetComputerNameW);
+// --- Exported C function to set the spoofed name ---
+extern "C" {
+    __declspec(dllexport) void SetSpoofedComputerName(const wchar_t* name) {
+        if (name) {
+            g_spoofedComputerName = name;
+        } 
+    }
 }
 
-// Function to get pointers to the hook functions
-PVOID GetHookedGetComputerNameA() {
-    return reinterpret_cast<PVOID>(Hooked_GetComputerNameA);
+// --- Helper for logging ---
+static void LogOSInfo(const wchar_t* msg, LONG error_code = 0) {
+    WCHAR buf[512];
+    if (error_code != 0) {
+        swprintf_s(buf, L"OS_INFO_HOOK: %ls - Error: %ld (0x%08X)", msg, error_code, error_code);
+    } else {
+        swprintf_s(buf, L"OS_INFO_HOOK: %ls", msg);
+    }
+    OutputDebugStringW(buf);
 }
 
-PVOID GetHookedGetComputerNameW() {
-    return reinterpret_cast<PVOID>(Hooked_GetComputerNameW);
+// --- Initialization and Cleanup Functions ---
+bool InitializeOSInfoHooks() {
+    bool success = true;
+    if (Real_GetComputerNameW) {
+        LONG error = DetourAttach(&(PVOID&)Real_GetComputerNameW, Hooked_GetComputerNameW);
+        if (error != NO_ERROR) {
+            LogOSInfo(L"Failed to attach GetComputerNameW", error);
+            success = false;
+        }
+    } else {
+        LogOSInfo(L"Real_GetComputerNameW is null. Cannot attach hook.");
+        success = false;
+    }
+
+    if (Real_GetComputerNameExW) {
+        LONG error = DetourAttach(&(PVOID&)Real_GetComputerNameExW, Hooked_GetComputerNameExW);
+        if (error != NO_ERROR) {
+            LogOSInfo(L"Failed to attach GetComputerNameExW", error);
+            success = false;
+        }
+    } else {
+        LogOSInfo(L"Real_GetComputerNameExW is null. Cannot attach hook.");
+        success = false; 
+    }
+
+    return success;
 }
 
-// Function to get the spoofed computer name for other modules
-const WCHAR* GetSpoofedComputerName() {
-    return g_computerNameW;
+void CleanupOSInfoHooks() {
+    if (Real_GetComputerNameExW) { // Detach in reverse order of attach if dependencies exist, though not strictly necessary here
+        LONG error = DetourDetach(&(PVOID&)Real_GetComputerNameExW, Hooked_GetComputerNameExW);
+        if (error != NO_ERROR) LogOSInfo(L"Failed to detach GetComputerNameExW", error);
+    }
+    if (Real_GetComputerNameW) {
+        LONG error = DetourDetach(&(PVOID&)Real_GetComputerNameW, Hooked_GetComputerNameW);
+        if (error != NO_ERROR) LogOSInfo(L"Failed to detach GetComputerNameW", error);
+    }
 }

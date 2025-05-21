@@ -11,6 +11,6 @@ UINT WINAPI Hooked_GetSystemFirmwareTable_Central(DWORD FirmwareTableProviderSig
                                                 DWORD BufferSize);
 
 bool InitializeHardwareHooks();
-void RemoveHardwareHooks();
+void CleanupHardwareHooks();
 PVOID* GetRealGetSystemFirmwareTableAddressStore();
 PVOID GetCentralHookFunctionAddress();

@@ -29,3 +29,9 @@ BOOL WINAPI HookedDeviceIoControlForDiskSerial(
     LPDWORD lpBytesReturned,
     LPOVERLAPPED lpOverlapped
 );
+
+// Function to initialize the hook for DeviceIoControl for disk serial spoofing
+bool InitializeDiskSerialHooks();
+
+// Function to cleanup the hook for DeviceIoControl
+void CleanupDiskSerialHooks();

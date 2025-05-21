@@ -27,7 +27,7 @@ const memRelease = 0x8000
 const pageReadwrite = 0x04
 
 const SetSpoofedPcName = ConfigValue("SetSpoofedComputerName")
-const SetSpoofedVolSerial = ConfigValue("SetSpoofedVolumeSerial")
+const SetSpoofedVolumeSerial = ConfigValue("SetSpoofedVolumeSerial")
 const SetSpoofedMotherboardSerial = ConfigValue("SetSpoofedMotherboardSerial")
 const SetSpoofedMacAddress = ConfigValue("SetSpoofedMacAddress")
 const SetSpoofedWlanGUID = ConfigValue("SetSpoofedWlanGUID")
@@ -62,7 +62,7 @@ func (c *Config) ConfigureDLL() error {
 	if err := c.SetValue(SetSpoofedPcName, c.values.Hostname); err != nil {
 		return fmt.Errorf("failed to set spoofed computer name: %w", err)
 	}
-	if err := c.SetValue(SetSpoofedVolSerial, c.values.VolumeSerial); err != nil {
+	if err := c.SetValue(SetSpoofedVolumeSerial, c.values.VolumeSerial); err != nil {
 		return fmt.Errorf("failed to set spoofed volume serial: %w", err)
 	}
 	if err := c.SetValue(SetSpoofedMotherboardSerial, c.values.Motherboard); err != nil {

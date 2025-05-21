@@ -146,7 +146,6 @@ void ModifySmbiosForBiosSerial(PVOID pFirmwareTableBuffer, DWORD BufferSize) {
             }
         }
     }
-    OutputDebugStringW(L"BIOS_SERIAL: ModifySmbiosForBiosSerial called.");
 }
 
 PVOID* GetRealGetSystemFirmwareTableForBios() {
@@ -157,6 +156,6 @@ void InitializeBiosSerialHooks(PVOID realGetSystemFirmwareTable) {
     if (realGetSystemFirmwareTable) {
         Real_GetSystemFirmwareTable_Bios = reinterpret_cast<UINT(WINAPI*)(DWORD, DWORD, PVOID, DWORD)>(realGetSystemFirmwareTable);
     } else {
-        OutputDebugStringW(L"BIOS_SPOOF: Init with NULL Real_GetSystemFirmwareTable_Bios pointer!");
+        OutputDebugStringW(L"BIOS_SPOOF: CRITICAL - Init with NULL Real_GetSystemFirmwareTable_Bios pointer!");
     }
 }

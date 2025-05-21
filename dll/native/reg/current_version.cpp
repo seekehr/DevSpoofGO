@@ -130,20 +130,15 @@ void InitializeCurrentVersionSpoofing_Centralized(
     PVOID pTrueOriginalRegOpenKeyExA, PVOID pTrueOriginalRegQueryValueExA, PVOID pTrueOriginalRegGetValueA) 
 {
     if (s_current_version_initialized_data) return;
-    OutputDebugStringW(L"[CV] Init CurrentVersion spoofing (A/W)...");
     g_true_original_RegOpenKeyExW_cv_ptr = reinterpret_cast<PFN_CV_RegOpenKeyExW>(pTrueOriginalRegOpenKeyExW);
     g_true_original_RegOpenKeyExA_cv_ptr = reinterpret_cast<PFN_CV_RegOpenKeyExA>(pTrueOriginalRegOpenKeyExA);
-    if (!g_true_original_RegOpenKeyExW_cv_ptr) OutputDebugStringW(L"[CV] Warn: True orig RegOpenKeyExW NULL");
-    if (!g_true_original_RegOpenKeyExA_cv_ptr) OutputDebugStringA("[CV] Warn: True orig RegOpenKeyExA NULL");
+    if (!g_true_original_RegOpenKeyExW_cv_ptr) OutputDebugStringW(L"[CV] CRITICAL: True original RegOpenKeyExW is NULL in InitializeCurrentVersionSpoofing_Centralized");
+    if (!g_true_original_RegOpenKeyExA_cv_ptr) OutputDebugStringW(L"[CV] CRITICAL: True original RegOpenKeyExA is NULL in InitializeCurrentVersionSpoofing_Centralized");
 
     g_spoofedInstallDateEpoch = GenerateRandomEpochTimestamp(2024, 2024);
     g_spoofedInstallTimeEpoch = GenerateRandomEpochTimestamp(2024, 2024);
     g_spoofedProductId = GenerateRandomProductIdW();
-    wchar_t msg[200];
-    swprintf_s(msg, L"[CV] Spoofed IEpoch: %lu, ProdId: %s", g_spoofedInstallDateEpoch, g_spoofedProductId.c_str());
-    OutputDebugStringW(msg);
     s_current_version_initialized_data = true;
-    OutputDebugStringW(L"[CV] Init complete (A/W).");
 }
 
 const wchar_t* TARGET_CV_PATH_W = L"SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion";
@@ -152,306 +147,164 @@ const char*    TARGET_CV_PATH_A =  "SOFTWARE\\Microsoft\\Windows NT\\CurrentVers
 void Handle_RegOpenKeyExW_ForCurrentVersion(HKEY hKey, LPCWSTR lpSubKey, DWORD ulOptions, REGSAM samDesired, PHKEY phkResult, LSTATUS& return_status, bool& handled, PFN_CV_RegOpenKeyExW original_param) {
     handled = false;
     if (!s_current_version_initialized_data) {
-        OutputDebugStringW(L"[CV] Handle_RegOpenKeyExW: Bailed: not initialized.");
         return;
     }
     if (!original_param) {
-        OutputDebugStringW(L"[CV] Handle_RegOpenKeyExW: Bailed: original_param is NULL.");
+        OutputDebugStringW(L"[CV] CRITICAL: Handle_RegOpenKeyExW original_param is NULL.");
         return;
     }
 
-    WCHAR debugMsg[512];
-    swprintf_s(debugMsg, L"[CV] Handle_RegOpenKeyExW: Checking. hKey=0x%p, lpSubKey=\'%s\'", (void*)hKey, lpSubKey ? lpSubKey : L"<null>");
-    OutputDebugStringW(debugMsg);
-
     if (lpSubKey) {
         BOOL pathMatchResult = PathMatchSpecW(lpSubKey, TARGET_CV_PATH_W);
-        swprintf_s(debugMsg, L"[CV] Handle_RegOpenKeyExW: PathMatchSpecW with \'%s\' vs TARGET_CV_PATH_W (\'%s\') -> %s",
-                   lpSubKey, TARGET_CV_PATH_W, pathMatchResult ? L"TRUE" : L"FALSE");
-        OutputDebugStringW(debugMsg);
-
-        // Compare HKEYs as ULONG_PTR to avoid potential type issues, masking to lower 32 bits
         bool isHKLM = (((ULONG_PTR)hKey & 0xFFFFFFFF) == ((ULONG_PTR)HKEY_LOCAL_MACHINE & 0xFFFFFFFF));
         if (isHKLM && pathMatchResult) {
-            OutputDebugStringW(L"[CV] Handle_RegOpenKeyExW: Intercepted (Condition Met).");
             return_status = original_param(hKey, lpSubKey, ulOptions, samDesired, phkResult);
-            swprintf_s(debugMsg, L"[CV] Handle_RegOpenKeyExW: Original call status: %ld. phkResult points to: 0x%p", return_status, (phkResult && *phkResult) ? (void*)*phkResult : NULL);
-            OutputDebugStringW(debugMsg);
             if (return_status == ERROR_SUCCESS && phkResult && *phkResult) {
                 g_openCurrentVersionKeyHandles.insert(*phkResult);
-                swprintf_s(debugMsg, L"[CV] Handle_RegOpenKeyExW: Inserted HKEY 0x%p into g_openCurrentVersionKeyHandles. Set size: %zu", (void*)*phkResult, g_openCurrentVersionKeyHandles.size());
-                OutputDebugStringW(debugMsg);
             }
             handled = true;
-        } else {
-            swprintf_s(debugMsg, L"[CV] Handle_RegOpenKeyExW: Did not intercept. ((ULONG_PTR)hKey & 0xFFFFFFFF) == ((ULONG_PTR)HKLM & 0xFFFFFFFF) -> %s. pathMatch -> %s. Raw hKey: 0x%p, HKLM_masked: 0x%IX, hKey_masked: 0x%IX",
-                       isHKLM ? L"TRUE" : L"FALSE",
-                       pathMatchResult ? L"TRUE" : L"FALSE", (void*)hKey, (ULONG_PTR)HKEY_LOCAL_MACHINE & 0xFFFFFFFF, (ULONG_PTR)hKey & 0xFFFFFFFF);
-            OutputDebugStringW(debugMsg);
         }
-    } else {
-        OutputDebugStringW(L"[CV] Handle_RegOpenKeyExW: lpSubKey is NULL, not intercepting.");
     }
 }
 void Handle_RegQueryValueExW_ForCurrentVersion(HKEY hKey, LPCWSTR lpValueName, LPDWORD lpReserved, LPDWORD lpType, LPBYTE lpData, LPDWORD lpcbData, LSTATUS& return_status, bool& handled) {
     handled = false;
     if (!s_current_version_initialized_data) {
-        OutputDebugStringW(L"[CV] QueryValueExW: Bailed: not initialized.");
         return;
     }
 
-    WCHAR debugMsg[512];
-    swprintf_s(debugMsg, L"[CV] QueryValueExW: Checking. hKey=0x%p, lpValueName=\'%s\'", (void*)hKey, lpValueName ? lpValueName : L"<null>");
-    OutputDebugStringW(debugMsg);
-
     bool hKeyFound = g_openCurrentVersionKeyHandles.count(hKey) > 0;
-    swprintf_s(debugMsg, L"[CV] QueryValueExW: hKey 0x%p in g_openCurrentVersionKeyHandles? %s. Set size: %zu", (void*)hKey, hKeyFound ? L"YES" : L"NO", g_openCurrentVersionKeyHandles.size());
-    OutputDebugStringW(debugMsg);
     
     if (hKeyFound) {
         if (lpValueName == nullptr) {
-            OutputDebugStringW(L"[CV] QueryValueExW: lpValueName is NULL.");
             return_status = ERROR_INVALID_PARAMETER;
             handled = true;
             return;
         }
-        OutputDebugStringW((L"[CV] QueryValueExW for: " + std::wstring(lpValueName) + L" (Condition Met)").c_str());
-        if (_wcsicmp(lpValueName, L"DigitalProductId") == 0) { OutputDebugStringW(L"[CV] Spoofing DigitalProductId."); return_status = ReturnRegBinaryDataW_CV(g_spoofedDigitalProductId, sizeof(g_spoofedDigitalProductId), lpData, lpcbData, lpType); handled = true; }
-        else if (_wcsicmp(lpValueName, L"DigitalProductId4") == 0) { OutputDebugStringW(L"[CV] Spoofing DigitalProductId4."); return_status = ReturnRegBinaryDataW_CV(g_spoofedDigitalProductId4, sizeof(g_spoofedDigitalProductId4), lpData, lpcbData, lpType); handled = true; }
-        else if (_wcsicmp(lpValueName, L"InstallDate") == 0) { OutputDebugStringW(L"[CV] Spoofing InstallDate."); return_status = ReturnRegDwordDataW_CV(g_spoofedInstallDateEpoch, lpData, lpcbData, lpType); handled = true; }
-        else if (_wcsicmp(lpValueName, L"InstallTime") == 0) { OutputDebugStringW(L"[CV] Spoofing InstallTime."); return_status = ReturnRegDwordDataW_CV(g_spoofedInstallTimeEpoch, lpData, lpcbData, lpType); handled = true; }
-        else if (_wcsicmp(lpValueName, L"ProductId") == 0) { OutputDebugStringW(L"[CV] Spoofing ProductId."); return_status = ReturnRegSzDataW_CV(g_spoofedProductId, lpData, lpcbData, lpType); handled = true; }
-        else { OutputDebugStringW((L"[CV] QueryValueExW: No spoof for value: " + std::wstring(lpValueName)).c_str()); }
-    } else {
-        OutputDebugStringW(L"[CV] QueryValueExW: HKEY not tracked, not spoofing.");
+        if (_wcsicmp(lpValueName, L"DigitalProductId") == 0) { return_status = ReturnRegBinaryDataW_CV(g_spoofedDigitalProductId, sizeof(g_spoofedDigitalProductId), lpData, lpcbData, lpType); handled = true; }
+        else if (_wcsicmp(lpValueName, L"DigitalProductId4") == 0) { return_status = ReturnRegBinaryDataW_CV(g_spoofedDigitalProductId4, sizeof(g_spoofedDigitalProductId4), lpData, lpcbData, lpType); handled = true; }
+        else if (_wcsicmp(lpValueName, L"InstallDate") == 0) { return_status = ReturnRegDwordDataW_CV(g_spoofedInstallDateEpoch, lpData, lpcbData, lpType); handled = true; }
+        else if (_wcsicmp(lpValueName, L"InstallTime") == 0) { return_status = ReturnRegDwordDataW_CV(g_spoofedInstallTimeEpoch, lpData, lpcbData, lpType); handled = true; }
+        else if (_wcsicmp(lpValueName, L"ProductId") == 0) { return_status = ReturnRegSzDataW_CV(g_spoofedProductId, lpData, lpcbData, lpType); handled = true; }
     }
 }
 void Handle_RegGetValueW_ForCurrentVersion(HKEY hKey, LPCWSTR lpSubKey, LPCWSTR lpValue, DWORD dwFlags, LPDWORD pdwType, PVOID pvData, LPDWORD pcbData, LSTATUS& return_status, bool& handled) {
     handled = false; 
     if (!s_current_version_initialized_data) {
-        OutputDebugStringW(L"[CV] GetValueW: Bailed: not initialized.");
         return;
     }
 
     bool isHKLM_GetValue = (((ULONG_PTR)hKey & 0xFFFFFFFF) == ((ULONG_PTR)HKEY_LOCAL_MACHINE & 0xFFFFFFFF));
-    WCHAR debugMsg[512]; 
 
     if (isHKLM_GetValue && lpSubKey && PathMatchSpecW(lpSubKey, TARGET_CV_PATH_W)) {
         if (lpValue == nullptr) {
-            OutputDebugStringW(L"[CV] GetValueW: lpValue is NULL.");
             return_status = ERROR_INVALID_PARAMETER;
             handled = true;
             return;
         }
-        swprintf_s(debugMsg, L"[CV] GetValueW for subkey '%s', value '%s' (Condition Met)", lpSubKey, lpValue);
-        OutputDebugStringW(debugMsg);
 
         if (_wcsicmp(lpValue, L"DigitalProductId") == 0) { 
-            OutputDebugStringW(L"[CV] GetValueW: Spoofing DigitalProductId.");
-            return_status = ReturnRegBinaryDataW_CV(g_spoofedDigitalProductId, sizeof(g_spoofedDigitalProductId), static_cast<LPBYTE>(pvData), pcbData, pdwType); 
-            handled = true; 
+            return_status = ReturnRegBinaryDataW_CV(g_spoofedDigitalProductId, sizeof(g_spoofedDigitalProductId), reinterpret_cast<LPBYTE>(pvData), pcbData, pdwType); handled = true; 
         }
         else if (_wcsicmp(lpValue, L"DigitalProductId4") == 0) { 
-            OutputDebugStringW(L"[CV] GetValueW: Spoofing DigitalProductId4.");
-            return_status = ReturnRegBinaryDataW_CV(g_spoofedDigitalProductId4, sizeof(g_spoofedDigitalProductId4), static_cast<LPBYTE>(pvData), pcbData, pdwType); 
-            handled = true; 
+            return_status = ReturnRegBinaryDataW_CV(g_spoofedDigitalProductId4, sizeof(g_spoofedDigitalProductId4), reinterpret_cast<LPBYTE>(pvData), pcbData, pdwType); handled = true; 
         }
         else if (_wcsicmp(lpValue, L"InstallDate") == 0) { 
-            OutputDebugStringW(L"[CV] GetValueW: Spoofing InstallDate.");
-            return_status = ReturnRegDwordDataW_CV(g_spoofedInstallDateEpoch, static_cast<LPBYTE>(pvData), pcbData, pdwType); 
-            handled = true; 
+            return_status = ReturnRegDwordDataW_CV(g_spoofedInstallDateEpoch, reinterpret_cast<LPBYTE>(pvData), pcbData, pdwType); handled = true; 
         }
         else if (_wcsicmp(lpValue, L"InstallTime") == 0) { 
-            OutputDebugStringW(L"[CV] GetValueW: Spoofing InstallTime.");
-            return_status = ReturnRegDwordDataW_CV(g_spoofedInstallTimeEpoch, static_cast<LPBYTE>(pvData), pcbData, pdwType); 
-            handled = true; 
+            return_status = ReturnRegDwordDataW_CV(g_spoofedInstallTimeEpoch, reinterpret_cast<LPBYTE>(pvData), pcbData, pdwType); handled = true; 
         }
         else if (_wcsicmp(lpValue, L"ProductId") == 0) { 
-            OutputDebugStringW(L"[CV] GetValueW: Spoofing ProductId.");
-            return_status = ReturnRegSzDataW_CV(g_spoofedProductId, static_cast<LPBYTE>(pvData), pcbData, pdwType); 
-            handled = true; 
+            return_status = ReturnRegSzDataW_CV(g_spoofedProductId, reinterpret_cast<LPBYTE>(pvData), pcbData, pdwType); handled = true; 
         }
-        else {
-            swprintf_s(debugMsg, L"[CV] GetValueW: No spoof for value: %s", lpValue);
-            OutputDebugStringW(debugMsg);
-        }
-
-        if (handled && return_status == ERROR_MORE_DATA && (dwFlags & RRF_ZEROONFAILURE) && pvData && pcbData && *pcbData > 0) {
-            OutputDebugStringW(L"[CV] GetValueW: Applying RRF_ZEROONFAILURE.");
-            memset(pvData, 0, *pcbData);
-        }
-    } else {
-        // Optional logging for conditions not met
     }
 }
 
 void Handle_RegOpenKeyExA_ForCurrentVersion(HKEY hKey, LPCSTR lpSubKey, DWORD ulOptions, REGSAM samDesired, PHKEY phkResult, LSTATUS& return_status, bool& handled, PFN_CV_RegOpenKeyExA original_param) {
     handled = false;
     if (!s_current_version_initialized_data) {
-        OutputDebugStringA("[CV] Handle_RegOpenKeyExA: Bailed: not initialized.");
         return;
     }
     if (!original_param) {
-        OutputDebugStringA("[CV] Handle_RegOpenKeyExA: Bailed: original_param is NULL.");
+        OutputDebugStringW(L"[CV] CRITICAL: Handle_RegOpenKeyExA original_param is NULL.");
         return;
     }
 
-    CHAR debugMsg[512];
-    sprintf_s(debugMsg, "[CV] Handle_RegOpenKeyExA: Checking. hKey=0x%p, lpSubKey='%s'", (void*)hKey, lpSubKey ? lpSubKey : "<null>");
-    OutputDebugStringA(debugMsg);
-
     if (lpSubKey) {
         BOOL pathMatchResult = PathMatchSpecA(lpSubKey, TARGET_CV_PATH_A);
-        sprintf_s(debugMsg, "[CV] Handle_RegOpenKeyExA: PathMatchSpecA with '%s' vs TARGET_CV_PATH_A ('%s') -> %s",
-                   lpSubKey, TARGET_CV_PATH_A, pathMatchResult ? "TRUE" : "FALSE");
-        OutputDebugStringA(debugMsg);
-
-        // Compare HKEYs as ULONG_PTR to avoid potential type issues, masking to lower 32 bits
         bool isHKLM = (((ULONG_PTR)hKey & 0xFFFFFFFF) == ((ULONG_PTR)HKEY_LOCAL_MACHINE & 0xFFFFFFFF));
         if (isHKLM && pathMatchResult) {
-            OutputDebugStringA("[CV] Handle_RegOpenKeyExA: Intercepted (Condition Met).");
             return_status = original_param(hKey, lpSubKey, ulOptions, samDesired, phkResult);
-            sprintf_s(debugMsg, "[CV] Handle_RegOpenKeyExA: Original call status: %ld. phkResult points to: 0x%p", return_status, (phkResult && *phkResult) ? (void*)*phkResult : NULL);
-            OutputDebugStringA(debugMsg);
             if (return_status == ERROR_SUCCESS && phkResult && *phkResult) {
                 g_openCurrentVersionKeyHandles.insert(*phkResult);
-                sprintf_s(debugMsg, "[CV] Handle_RegOpenKeyExA: Inserted HKEY 0x%p into g_openCurrentVersionKeyHandles. Set size: %zu", (void*)*phkResult, g_openCurrentVersionKeyHandles.size());
-                OutputDebugStringA(debugMsg);
             }
             handled = true;
-        } else {
-            sprintf_s(debugMsg, "[CV] Handle_RegOpenKeyExA: Did not intercept. ((ULONG_PTR)hKey & 0xFFFFFFFF) == ((ULONG_PTR)HKLM & 0xFFFFFFFF) -> %s. pathMatch -> %s. Raw hKey: 0x%p, HKLM_masked: 0x%IX, hKey_masked: 0x%IX",
-                       isHKLM ? "TRUE" : "FALSE",
-                       pathMatchResult ? "TRUE" : "FALSE", (void*)hKey, (ULONG_PTR)HKEY_LOCAL_MACHINE & 0xFFFFFFFF, (ULONG_PTR)hKey & 0xFFFFFFFF);
-            OutputDebugStringA(debugMsg);
         }
-    } else {
-        OutputDebugStringA("[CV] Handle_RegOpenKeyExA: lpSubKey is NULL, not intercepting.");
     }
 }
 void Handle_RegQueryValueExA_ForCurrentVersion(HKEY hKey, LPCSTR lpValueName, LPDWORD lpReserved, LPDWORD lpType, LPBYTE lpData, LPDWORD lpcbData, LSTATUS& return_status, bool& handled) {
     handled = false;
     if (!s_current_version_initialized_data) {
-        OutputDebugStringA("[CV] QueryValueExA: Bailed: not initialized.");
         return;
     }
 
-    CHAR debugMsg[512];
-    sprintf_s(debugMsg, "[CV] QueryValueExA: Checking. hKey=0x%p, lpValueName='%s'", (void*)hKey, lpValueName ? lpValueName : "<null>");
-    OutputDebugStringA(debugMsg);
-
     bool hKeyFound = g_openCurrentVersionKeyHandles.count(hKey) > 0;
-    sprintf_s(debugMsg, "[CV] QueryValueExA: hKey 0x%p in g_openCurrentVersionKeyHandles? %s. Set size: %zu", (void*)hKey, hKeyFound ? "YES" : "NO", g_openCurrentVersionKeyHandles.size());
-    OutputDebugStringA(debugMsg);
 
     if (hKeyFound) {
         if (lpValueName == nullptr) {
-            OutputDebugStringA("[CV] QueryValueExA: lpValueName is NULL.");
             return_status = ERROR_INVALID_PARAMETER;
             handled = true;
             return;
         }
-        OutputDebugStringA((std::string("[CV] QueryValueExA for: ") + (lpValueName ? lpValueName : "<null>") + " (Condition Met)").c_str());
-        std::string ansiProductId = ConvertWideToAnsi_CV(g_spoofedProductId.c_str());
-        if (_stricmp(lpValueName, "DigitalProductId") == 0) { 
-            OutputDebugStringA("[CV] QueryValueExA: Spoofing DigitalProductId.");
-            return_status = ReturnRegBinaryDataA_CV(g_spoofedDigitalProductId, sizeof(g_spoofedDigitalProductId), lpData, lpcbData, lpType); 
-            handled = true; 
-        }
-        else if (_stricmp(lpValueName, "DigitalProductId4") == 0) { 
-            OutputDebugStringA("[CV] QueryValueExA: Spoofing DigitalProductId4.");
-            return_status = ReturnRegBinaryDataA_CV(g_spoofedDigitalProductId4, sizeof(g_spoofedDigitalProductId4), lpData, lpcbData, lpType); 
-            handled = true; 
-        }
-        else if (_stricmp(lpValueName, "InstallDate") == 0) { 
-            OutputDebugStringA("[CV] QueryValueExA: Spoofing InstallDate.");
-            return_status = ReturnRegDwordDataA_CV(g_spoofedInstallDateEpoch, lpData, lpcbData, lpType); 
-            handled = true; 
-        }
-        else if (_stricmp(lpValueName, "InstallTime") == 0) { 
-            OutputDebugStringA("[CV] QueryValueExA: Spoofing InstallTime.");
-            return_status = ReturnRegDwordDataA_CV(g_spoofedInstallTimeEpoch, lpData, lpcbData, lpType); 
-            handled = true; 
-        }
-        else if (_stricmp(lpValueName, "ProductId") == 0) { 
-            OutputDebugStringA("[CV] QueryValueExA: Spoofing ProductId.");
-            return_status = ReturnRegSzDataA_CV(ansiProductId, lpData, lpcbData, lpType); 
-            handled = true; 
-        }
-        else {
-            sprintf_s(debugMsg, "[CV] QueryValueExA: No spoof for value: %s", lpValueName);
-            OutputDebugStringA(debugMsg);
-        }
-    } else {
-        OutputDebugStringA("[CV] QueryValueExA: HKEY not tracked, not spoofing.");
+        std::string valueNameStr = lpValueName;
+        if (valueNameStr == "DigitalProductId") { return_status = ReturnRegBinaryDataA_CV(g_spoofedDigitalProductId, sizeof(g_spoofedDigitalProductId), lpData, lpcbData, lpType); handled = true; }
+        else if (valueNameStr == "DigitalProductId4") { return_status = ReturnRegBinaryDataA_CV(g_spoofedDigitalProductId4, sizeof(g_spoofedDigitalProductId4), lpData, lpcbData, lpType); handled = true; }
+        else if (valueNameStr == "InstallDate") { return_status = ReturnRegDwordDataA_CV(g_spoofedInstallDateEpoch, lpData, lpcbData, lpType); handled = true; }
+        else if (valueNameStr == "InstallTime") { return_status = ReturnRegDwordDataA_CV(g_spoofedInstallTimeEpoch, lpData, lpcbData, lpType); handled = true; }
+        else if (valueNameStr == "ProductId") { std::string spoofedProductIdA = ConvertWideToAnsi_CV(g_spoofedProductId.c_str()); return_status = ReturnRegSzDataA_CV(spoofedProductIdA, lpData, lpcbData, lpType); handled = true; }
     }
 }
 void Handle_RegGetValueA_ForCurrentVersion(HKEY hKey, LPCSTR lpSubKey, LPCSTR lpValue, DWORD dwFlags, LPDWORD pdwType, PVOID pvData, LPDWORD pcbData, LSTATUS& return_status, bool& handled) {
-    handled = false; 
+    handled = false;
     if (!s_current_version_initialized_data) {
-        OutputDebugStringA("[CV] GetValueA: Bailed: not initialized.");
         return;
     }
+    bool isHKLM_GetValue = (((ULONG_PTR)hKey & 0xFFFFFFFF) == ((ULONG_PTR)HKEY_LOCAL_MACHINE & 0xFFFFFFFF));
 
-    // Apply the same HKLM comparison fix here
-    bool isHKLM_GetValueA = (((ULONG_PTR)hKey & 0xFFFFFFFF) == ((ULONG_PTR)HKEY_LOCAL_MACHINE & 0xFFFFFFFF));
-    CHAR debugMsg[512]; // For logging
-
-    if (isHKLM_GetValueA && lpSubKey && PathMatchSpecA(lpSubKey, TARGET_CV_PATH_A)) {
+    if (isHKLM_GetValue && lpSubKey && PathMatchSpecA(lpSubKey, TARGET_CV_PATH_A)) {
         if (lpValue == nullptr) {
-            OutputDebugStringA("[CV] GetValueA: lpValue is NULL.");
             return_status = ERROR_INVALID_PARAMETER;
             handled = true;
             return;
         }
-        sprintf_s(debugMsg, "[CV] GetValueA for subkey '%s', value '%s' (Condition Met)", lpSubKey, lpValue);
-        OutputDebugStringA(debugMsg);
-
-        std::string ansiProductId = ConvertWideToAnsi_CV(g_spoofedProductId.c_str());
-        if (_stricmp(lpValue, "DigitalProductId") == 0) { 
-            OutputDebugStringA("[CV] GetValueA: Spoofing DigitalProductId.");
-            return_status = ReturnRegBinaryDataA_CV(g_spoofedDigitalProductId, sizeof(g_spoofedDigitalProductId), static_cast<LPBYTE>(pvData), pcbData, pdwType); 
-            handled = true; 
+        std::string valueNameStr = lpValue;
+        if (valueNameStr == "DigitalProductId") { 
+            return_status = ReturnRegBinaryDataA_CV(g_spoofedDigitalProductId, sizeof(g_spoofedDigitalProductId), reinterpret_cast<LPBYTE>(pvData), pcbData, pdwType); handled = true; 
         }
-        else if (_stricmp(lpValue, "DigitalProductId4") == 0) { 
-            OutputDebugStringA("[CV] GetValueA: Spoofing DigitalProductId4.");
-            return_status = ReturnRegBinaryDataA_CV(g_spoofedDigitalProductId4, sizeof(g_spoofedDigitalProductId4), static_cast<LPBYTE>(pvData), pcbData, pdwType); 
-            handled = true; 
+        else if (valueNameStr == "DigitalProductId4") { 
+            return_status = ReturnRegBinaryDataA_CV(g_spoofedDigitalProductId4, sizeof(g_spoofedDigitalProductId4), reinterpret_cast<LPBYTE>(pvData), pcbData, pdwType); handled = true; 
         }
-        else if (_stricmp(lpValue, "InstallDate") == 0) { 
-            OutputDebugStringA("[CV] GetValueA: Spoofing InstallDate.");
-            return_status = ReturnRegDwordDataA_CV(g_spoofedInstallDateEpoch, static_cast<LPBYTE>(pvData), pcbData, pdwType); 
-            handled = true; 
+        else if (valueNameStr == "InstallDate") { 
+            return_status = ReturnRegDwordDataA_CV(g_spoofedInstallDateEpoch, reinterpret_cast<LPBYTE>(pvData), pcbData, pdwType); handled = true; 
         }
-        else if (_stricmp(lpValue, "InstallTime") == 0) { 
-            OutputDebugStringA("[CV] GetValueA: Spoofing InstallTime.");
-            return_status = ReturnRegDwordDataA_CV(g_spoofedInstallTimeEpoch, static_cast<LPBYTE>(pvData), pcbData, pdwType); 
-            handled = true; 
+        else if (valueNameStr == "InstallTime") { 
+            return_status = ReturnRegDwordDataA_CV(g_spoofedInstallTimeEpoch, reinterpret_cast<LPBYTE>(pvData), pcbData, pdwType); handled = true; 
         }
-        else if (_stricmp(lpValue, "ProductId") == 0) { 
-            OutputDebugStringA("[CV] GetValueA: Spoofing ProductId.");
-            return_status = ReturnRegSzDataA_CV(ansiProductId, static_cast<LPBYTE>(pvData), pcbData, pdwType); 
-            handled = true; 
-        }
-        else {
-            sprintf_s(debugMsg, "[CV] GetValueA: No spoof for value: %s", lpValue);
-            OutputDebugStringA(debugMsg);
-        }
-        
-        if (handled && return_status == ERROR_MORE_DATA && (dwFlags & RRF_ZEROONFAILURE) && pvData && pcbData && *pcbData > 0) {
-            OutputDebugStringA("[CV] GetValueA: Applying RRF_ZEROONFAILURE.");
-            memset(pvData, 0, *pcbData);
+        else if (valueNameStr == "ProductId") { 
+            std::string spoofedProductIdA = ConvertWideToAnsi_CV(g_spoofedProductId.c_str()); 
+            return_status = ReturnRegSzDataA_CV(spoofedProductIdA, reinterpret_cast<LPBYTE>(pvData), pcbData, pdwType); handled = true; 
         }
     }
 }
 
 void Handle_RegCloseKey_ForCurrentVersion(HKEY hKey, LSTATUS& return_status, bool& handled) {
     handled = false;
-    if (!s_current_version_initialized_data) return;
-    auto it = g_openCurrentVersionKeyHandles.find(hKey);
-    if (it != g_openCurrentVersionKeyHandles.end()) {
-        OutputDebugStringW(L"[CV] Untracking HKEY in RegCloseKey.");
-        g_openCurrentVersionKeyHandles.erase(it);
-        return_status = ERROR_SUCCESS;
+    if (!s_current_version_initialized_data) {
+        return;
     }
+    if (g_openCurrentVersionKeyHandles.count(hKey)) {
+        g_openCurrentVersionKeyHandles.erase(hKey);
+        handled = true;
+    }
+    return_status = ERROR_SUCCESS; 
 }

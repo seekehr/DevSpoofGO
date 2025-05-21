@@ -39,11 +39,9 @@ void SetSpoofedProcessorId(const char* processorIdString) {
         if (endPtr != processorIdString && (*endPtr == '\0' || *endPtr == ' ')) {
             g_spoofedProcessorId = newId;
         } else {
-            OutputDebugStringA("[ProcessorID] Failed to parse processorIdString.");
+            OutputDebugStringA("[ProcessorID] CRITICAL - Failed to parse processorIdString.");
         }
-    } else {
-        OutputDebugStringA("[ProcessorID] processorIdString is null or empty, using default/zero.");
-    }
+    } 
 }
 
 void ModifySmbiosForProcessorId(PVOID pFirmwareTableBuffer, DWORD BufferSize) {
@@ -65,7 +63,7 @@ void ModifySmbiosForProcessorId(PVOID pFirmwareTableBuffer, DWORD BufferSize) {
         p = FindNextSMBIOSStructure(p, pEnd);
         if (!p) break;
     }
-    OutputDebugStringW(L"PROCESSOR_ID: ModifySmbiosForProcessorId called.");
+    // Removed: OutputDebugStringW(L"PROCESSOR_ID: ModifySmbiosForProcessorId called.");
 }
 
 PVOID* GetRealGetSystemFirmwareTableForProcessorId() {
@@ -76,6 +74,6 @@ void InitializeProcessorIdHooks(PVOID realGetSystemFirmwareTable) {
     if (realGetSystemFirmwareTable) {
         Real_GetSystemFirmwareTable_Processor = reinterpret_cast<UINT(WINAPI*)(DWORD, DWORD, PVOID, DWORD)>(realGetSystemFirmwareTable);
     } else {
-        OutputDebugStringW(L"PROCESSOR_ID_SPOOF: Init with NULL Real_GetSystemFirmwareTable pointer!");
+        OutputDebugStringW(L"PROCESSOR_ID_SPOOF: CRITICAL - Init with NULL Real_GetSystemFirmwareTable pointer!");
     }
 }

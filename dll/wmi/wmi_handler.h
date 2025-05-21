@@ -1,7 +1,7 @@
 #pragma once
 #include <windows.h>
-#include <wbemidl.h> // For IWbemServices, IEnumWbemClassObject, IWbemClassObject
-#include <Unknwn.h> // For IUnknown and IID_IUnknown
+#include <wbemidl.h> 
+#include <Unknwn.h> 
 
 // Function pointer types
 typedef HRESULT (STDMETHODCALLTYPE *RealExecQueryType)(
@@ -20,8 +20,7 @@ typedef HRESULT (STDMETHODCALLTYPE *RealCreateInstanceEnumType)(
 typedef HRESULT (STDMETHODCALLTYPE *RealGetObjectType)(
     IWbemServices*, const BSTR, long, IWbemContext*, IWbemClassObject**, IWbemCallResult**);
 
-// Global pointers to hold the addresses of the original functions
-extern RealExecQueryType g_real_ExecQuery; // Still keep this for calling the original if needed
+// Global pointers to hold the addresses of
 extern RealCoCreateInstanceType g_real_CoCreateInstance;
 extern RealConnectServerType g_real_ConnectServer;
 

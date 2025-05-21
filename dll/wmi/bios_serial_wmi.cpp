@@ -294,54 +294,59 @@ inline bool IsBiosPath(const BSTR strPath) {
 }
 
 bool InitializeBiosSerialWMIModule() {
-    // Placeholder for any specific initialization for this module if needed in the future.
-    // For now, mock objects are created on-demand.
+    OutputDebugStringW(L"[WMI_BIOS_SERIAL] Initializing BIOS Serial WMI module.\n");
     return true;
 }
 
 void CleanupBiosSerialWMIModule() {
-    // Placeholder for cleanup if any global resources were allocated by this module.
+    OutputDebugStringW(L"[WMI_BIOS_SERIAL] Cleaning up BIOS Serial WMI module.\n");
 }
 
 HRESULT Handle_ExecQuery_BiosSerial(IWbemServices*, const BSTR, const BSTR strQuery, long, IWbemContext*, IEnumWbemClassObject **ppEnum, bool &handled) {
     handled = false;
     if (IsBiosSerialQuery(strQuery)) {
-        *ppEnum = new MockEnumWbemClassObject(BIOS_SPOOFED_SERIAL_NUMBER, L"Win32_BIOS");
+        OutputDebugStringW(L"[WMI_BIOS_SERIAL] Handling ExecQuery for BIOS SerialNumber.\n");
+        if (!ppEnum) return E_POINTER;
+        *ppEnum = new MockEnumWbemClassObject(BIOS_SPOOFED_SERIAL_NUMBER);
         if (!*ppEnum) {
-            OutputDebugStringW(L"[WMI_BIOS_SERIAL] CRITICAL: E_OUTOFMEMORY creating MockEnumWbemClassObject in Handle_ExecQuery.\n");
+            OutputDebugStringW(L"[WMI_BIOS_SERIAL] CRITICAL: Failed to create MockEnumWbemClassObject for ExecQuery. E_OUTOFMEMORY.\n");
             return E_OUTOFMEMORY;
         }
         handled = true;
         return S_OK;
     }
-    return S_OK; // Not an error if not handled, main hook will pass to original
+    return S_OK; 
 }
 
-HRESULT Handle_GetObject_BiosSerial(IWbemServices*, const BSTR strObjectPath, long, IWbemContext*, IWbemClassObject **ppObject, IWbemCallResult**, bool &handled) {
+HRESULT Handle_GetObject_BiosSerial(IWbemServices*, const BSTR strObjectPath, long, IWbemContext*, IWbemClassObject **ppObject, IWbemCallResult **ppCallResult, bool &handled) {
     handled = false;
     if (IsBiosPath(strObjectPath)) {
-        *ppObject = new MockWbemClassObject(BIOS_SPOOFED_SERIAL_NUMBER, L"Win32_BIOS");
+        OutputDebugStringW(L"[WMI_BIOS_SERIAL] Handling GetObject for BIOS SerialNumber.\n");
+        if (!ppObject) return E_POINTER;
+        *ppObject = new MockWbemClassObject(BIOS_SPOOFED_SERIAL_NUMBER);
         if (!*ppObject) {
-            OutputDebugStringW(L"[WMI_BIOS_SERIAL] CRITICAL: E_OUTOFMEMORY creating MockWbemClassObject in Handle_GetObject.\n");
+            OutputDebugStringW(L"[WMI_BIOS_SERIAL] CRITICAL: Failed to create MockWbemClassObject for GetObject. E_OUTOFMEMORY.\n");
             return E_OUTOFMEMORY;
         }
-        // if (ppCallResult) *ppCallResult = NULL; // Client responsibility, usually null for GetObject sync
+        if (ppCallResult) *ppCallResult = nullptr; 
         handled = true;
         return S_OK;
     }
-    return S_OK;
+    return S_OK; 
 }
 
 HRESULT Handle_CreateInstanceEnum_BiosSerial(IWbemServices*, const BSTR strFilter, long, IWbemContext*, IEnumWbemClassObject **ppEnum, bool &handled) {
     handled = false;
-    if (IsBiosPath(strFilter)) {
-        *ppEnum = new MockEnumWbemClassObject(BIOS_SPOOFED_SERIAL_NUMBER, L"Win32_BIOS");
+    if (strFilter && _wcsicmp(strFilter, L"Win32_BIOS") == 0) {
+        OutputDebugStringW(L"[WMI_BIOS_SERIAL] Handling CreateInstanceEnum for Win32_BIOS.\n");
+        if (!ppEnum) return E_POINTER;
+        *ppEnum = new MockEnumWbemClassObject(BIOS_SPOOFED_SERIAL_NUMBER);
         if (!*ppEnum) {
-            OutputDebugStringW(L"[WMI_BIOS_SERIAL] CRITICAL: E_OUTOFMEMORY creating MockEnumWbemClassObject in Handle_CreateInstanceEnum.\n");
+            OutputDebugStringW(L"[WMI_BIOS_SERIAL] CRITICAL: Failed to create MockEnumWbemClassObject for CreateInstanceEnum. E_OUTOFMEMORY.\n");
             return E_OUTOFMEMORY;
         }
         handled = true;
         return S_OK;
     }
-    return S_OK;
+    return S_OK; 
 }

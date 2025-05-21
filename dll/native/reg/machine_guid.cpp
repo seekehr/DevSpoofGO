@@ -111,7 +111,6 @@ void Handle_RegQueryValueExW_ForMachineGuid(
     if (!s_machine_guid_initialized_data) return;
 
     if (lpValueName && wcscmp(lpValueName, L"MachineGuid") == 0) {
-        OutputDebugStringA("[MachineGuid] Handle_RegQueryValueExW: Intercepted MachineGuid query.");
         return_status = ReturnRegSzDataW_MG(g_spoofedMachineGuid, lpData, lpcbData, lpType);
         handled = true;
         return;
@@ -119,7 +118,7 @@ void Handle_RegQueryValueExW_ForMachineGuid(
 }
 
 void Handle_RegGetValueW_ForMachineGuid(
-    HKEY hkey, LPCWSTR lpSubKey, LPCWSTR lpValue, DWORD dwFlags, 
+    HKEY hkey, LPCWSTR lpSubKey, LPCWSTR lpValue, DWORD dwFlags,
     LPDWORD pdwType, PVOID pvData, LPDWORD pcbData,
     LSTATUS& return_status, bool& handled)
 {
@@ -129,9 +128,7 @@ void Handle_RegGetValueW_ForMachineGuid(
     if (hkey == HKEY_LOCAL_MACHINE && lpSubKey && wcscmp(lpSubKey, L"SOFTWARE\\Microsoft\\Cryptography") == 0 &&
         lpValue && wcscmp(lpValue, L"MachineGuid") == 0) 
     {
-        OutputDebugStringA("[MachineGuid] Handle_RegGetValueW: Intercepted MachineGuid query for specific path.");
         return_status = ReturnRegSzDataW_MG(g_spoofedMachineGuid, reinterpret_cast<LPBYTE>(pvData), pcbData, pdwType);
-        // Special handling for RRF_ZEROONFAILURE based on RegGetValueW documentation
         if (return_status == ERROR_MORE_DATA && (dwFlags & RRF_ZEROONFAILURE) && pvData && pcbData && *pcbData > 0) {
             memset(pvData, 0, *pcbData); 
         }
@@ -150,7 +147,6 @@ void Handle_RegQueryValueExA_ForMachineGuid(
     if (!s_machine_guid_initialized_data) return;
 
     if (lpValueName && strcmp(lpValueName, "MachineGuid") == 0) {
-        OutputDebugStringA("[MachineGuid] Handle_RegQueryValueExA: Intercepted MachineGuid query.");
         std::string ansiSpoofedGuid = ConvertWideToAnsi_MG(g_spoofedMachineGuid.c_str());
         return_status = ReturnRegSzDataA_MG(ansiSpoofedGuid, lpData, lpcbData, lpType);
         handled = true;
@@ -169,7 +165,6 @@ void Handle_RegGetValueA_ForMachineGuid(
     if (hkey == HKEY_LOCAL_MACHINE && lpSubKey && strcmp(lpSubKey, "SOFTWARE\\Microsoft\\Cryptography") == 0 &&
         lpValue && strcmp(lpValue, "MachineGuid") == 0) 
     {
-        OutputDebugStringA("[MachineGuid] Handle_RegGetValueA: Intercepted MachineGuid query for specific path.");
         std::string ansiSpoofedGuid = ConvertWideToAnsi_MG(g_spoofedMachineGuid.c_str());
         return_status = ReturnRegSzDataA_MG(ansiSpoofedGuid, reinterpret_cast<LPBYTE>(pvData), pcbData, pdwType);
         if (return_status == ERROR_MORE_DATA && (dwFlags & RRF_ZEROONFAILURE) && pvData && pcbData && *pcbData > 0) {

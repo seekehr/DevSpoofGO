@@ -108,12 +108,12 @@ void SetSpoofedMotherboardSerial(const char* serial) {
 
 void ModifySmbiosForMotherboardSerial(PVOID pFirmwareTableBuffer, DWORD BufferSize) {
     if (!pFirmwareTableBuffer || BufferSize < sizeof(RawSMBIOSDataMB)) {
-        OutputDebugStringW(L"MB_SPOOF: Invalid buffer or size for modification.");
+        OutputDebugStringW(L"MB_SPOOF: CRITICAL - Invalid buffer or size for modification.");
         return;
     }
     RawSMBIOSDataMB* pSmbios = static_cast<RawSMBIOSDataMB*>(pFirmwareTableBuffer);
     if (pSmbios->Length > BufferSize - offsetof(RawSMBIOSDataMB, SMBIOSTableData)) {
-         OutputDebugStringW(L"MB_SPOOF: SMBIOS length exceeds buffer capacity.");
+         OutputDebugStringW(L"MB_SPOOF: CRITICAL - SMBIOS length exceeds buffer capacity.");
          return;
     }
     const BYTE* tableData = pSmbios->SMBIOSTableData;
@@ -125,7 +125,7 @@ void ModifySmbiosForMotherboardSerial(PVOID pFirmwareTableBuffer, DWORD BufferSi
             const BYTE* stringSectionStart = structStartPtr +
                 reinterpret_cast<const SMBIOSStructHeaderMB*>(structStartPtr)->Length;
             if (stringSectionStart >= pEnd) {
-                 OutputDebugStringW(L"MB_SPOOF: String section out of bounds.");
+                 OutputDebugStringW(L"MB_SPOOF: CRITICAL - String section out of bounds.");
                  return;
             }
             BYTE* currentStringPtr = const_cast<BYTE*>(stringSectionStart);
@@ -136,12 +136,12 @@ void ModifySmbiosForMotherboardSerial(PVOID pFirmwareTableBuffer, DWORD BufferSi
                 if (currentStringPtr < pEnd) {
                     currentStringPtr++;
                 } else {
-                    OutputDebugStringW(L"MB_SPOOF: Error locating Nth serial string.");
+                    OutputDebugStringW(L"MB_SPOOF: CRITICAL - Error locating Nth serial string.");
                     return;
                 }
             }
             if (currentStringPtr >= pEnd) {
-                 OutputDebugStringW(L"MB_SPOOF: Serial string pointer out of bounds before spoofing.");
+                 OutputDebugStringW(L"MB_SPOOF: CRITICAL - Serial string pointer out of bounds before spoofing.");
                  return;
             }
             size_t originalSerialLen = 0;
@@ -164,13 +164,12 @@ void ModifySmbiosForMotherboardSerial(PVOID pFirmwareTableBuffer, DWORD BufferSi
             }
         }
     }
-    OutputDebugStringW(L"MB_SPOOF: ModifySmbiosForMotherboardSerial called.");
 }
 
 void InitializeMotherboardSerialHooks(PVOID realGetSystemFirmwareTable) {
     if (realGetSystemFirmwareTable) {
         Real_GetSystemFirmwareTable_MB = reinterpret_cast<UINT(WINAPI*)(DWORD, DWORD, PVOID, DWORD)>(realGetSystemFirmwareTable);
     } else {
-        OutputDebugStringW(L"MB_SPOOF: Init with NULL Real_GetSystemFirmwareTable_MB pointer!");
+        OutputDebugStringW(L"MB_SPOOF: CRITICAL - Init with NULL Real_GetSystemFirmwareTable_MB pointer!");
     }
 }

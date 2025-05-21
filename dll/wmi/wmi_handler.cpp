@@ -58,13 +58,13 @@ bool AttachHook(void** originalFunc, void* hookFunc) {
     DetourUpdateThread(GetCurrentThread());
     LONG error = DetourAttach(&(PVOID&)*originalFunc, hookFunc);
     if (error != NO_ERROR) {
-        LogMessage("[WMI_HANDLER] CRITICAL: DetourAttach failed: %d\\n", error);
+        LogMessage("[WMI_HANDLER] CRITICAL: DetourAttach failed: %d\n", error);
         DetourTransactionAbort();
         return false;
     }
     error = DetourTransactionCommit();
     if (error != NO_ERROR) {
-        LogMessage("[WMI_HANDLER] CRITICAL: DetourTransactionCommit failed: %d\\n", error);
+        LogMessage("[WMI_HANDLER] CRITICAL: DetourTransactionCommit failed: %d\n", error);
         return false;
     }
     return true;
@@ -85,12 +85,11 @@ HRESULT STDMETHODCALLTYPE Hooked_ExecQuery(
     HRESULT hr = Handle_ExecQuery_BiosSerial(pThis, strQueryLanguage, strQuery, lFlags, pCtx, ppEnum, handled);
     
     if (handled) {
-        return hr; // BiosSerial module handled it
+        return hr;
     }
 
-    // If not handled by any specific module, call the original function
     if (!g_real_ExecQuery) {
-        LogMessage("[WMI_HANDLER] CRITICAL: Original ExecQuery is NULL.\\n");
+        LogMessage("[WMI_HANDLER] CRITICAL: Original ExecQuery is NULL.\n");
         return E_FAIL; 
     }
     return g_real_ExecQuery(pThis, strQueryLanguage, strQuery, lFlags, pCtx, ppEnum);
@@ -112,7 +111,7 @@ HRESULT STDMETHODCALLTYPE Hooked_GetObject(
     }
 
     if (!g_real_GetObject) {
-        LogMessage("[WMI_HANDLER] CRITICAL: Original GetObject is NULL.\\n");
+        LogMessage("[WMI_HANDLER] CRITICAL: Original GetObject is NULL.\n");
         return E_FAIL;
     }
     return g_real_GetObject(pThis, strObjectPath, lFlags, pCtx, ppObject, ppCallResult);
@@ -133,7 +132,7 @@ HRESULT STDMETHODCALLTYPE Hooked_CreateInstanceEnum(
     }
     
     if (!g_real_CreateInstanceEnum) {
-        LogMessage("[WMI_HANDLER] CRITICAL: Original CreateInstanceEnum is NULL.\\n");
+        LogMessage("[WMI_HANDLER] CRITICAL: Original CreateInstanceEnum is NULL.\n");
         return E_FAIL;
     }
     return g_real_CreateInstanceEnum(pThis, strFilter, lFlags, pCtx, ppEnum);
@@ -157,7 +156,7 @@ HRESULT STDMETHODCALLTYPE Hooked_ConnectServer(
         hr = g_real_ConnectServer(pThis, strNetworkResource, strUser, strPassword, 
                                  strLocale, lFlags, strAuthority, pCtx, ppSvc);
     } catch (...) {
-        LogMessage("[WMI_HANDLER] CRITICAL: Exception in original ConnectServer call\\n");
+        LogMessage("[WMI_HANDLER] CRITICAL: Exception in original ConnectServer call\n");
         g_isInConnectServer = false;
         return E_FAIL;
     }
@@ -176,7 +175,7 @@ HRESULT STDMETHODCALLTYPE Hooked_ConnectServer(
                     g_real_ExecQuery = originalExecQuery;
                     commitTransaction = true;
                 } else {
-                    LogMessage("[WMI_HANDLER] CRITICAL: Failed to attach hook for ExecQuery\\n");
+                    LogMessage("[WMI_HANDLER] CRITICAL: Failed to attach hook for ExecQuery\n");
                 }
             }
 
@@ -186,7 +185,7 @@ HRESULT STDMETHODCALLTYPE Hooked_ConnectServer(
                     g_real_GetObject = originalGetObject;
                     commitTransaction = true;
                 } else {
-                     LogMessage("[WMI_HANDLER] CRITICAL: Failed to attach hook for GetObject\\n");
+                     LogMessage("[WMI_HANDLER] CRITICAL: Failed to attach hook for GetObject\n");
                 }
             }
 
@@ -196,13 +195,13 @@ HRESULT STDMETHODCALLTYPE Hooked_ConnectServer(
                     g_real_CreateInstanceEnum = originalCreateInstanceEnum;
                     commitTransaction = true;
                 } else {
-                    LogMessage("[WMI_HANDLER] CRITICAL: Failed to attach hook for CreateInstanceEnum\\n");
+                    LogMessage("[WMI_HANDLER] CRITICAL: Failed to attach hook for CreateInstanceEnum\n");
                 }
             }
             
             if (commitTransaction) {
                 if (DetourTransactionCommit() != NO_ERROR) {
-                     LogMessage("[WMI_HANDLER] CRITICAL: Hook transaction commit failed in ConnectServer\\n");
+                     LogMessage("[WMI_HANDLER] CRITICAL: Hook transaction commit failed in ConnectServer\n");
                 }
             } else {
                 // If no hooks were attached in this run, abort any pending transaction
@@ -239,10 +238,10 @@ HRESULT WINAPI Hooked_CoCreateInstance_For_Locator(
                 if (DetourTransactionCommit() == NO_ERROR) {
                     g_real_ConnectServer = originalConnectServer;
                 } else {
-                    LogMessage("[WMI_HANDLER] CRITICAL: Hook transaction commit failed for ConnectServer.\\n");
+                    LogMessage("[WMI_HANDLER] CRITICAL: Hook transaction commit failed for ConnectServer.\n");
                 }
             } else {
-                LogMessage("[WMI_HANDLER] CRITICAL: Failed to attach hook for ConnectServer.\\n");
+                LogMessage("[WMI_HANDLER] CRITICAL: Failed to attach hook for ConnectServer.\n");
                 DetourTransactionAbort();
             }
         }
@@ -252,50 +251,63 @@ HRESULT WINAPI Hooked_CoCreateInstance_For_Locator(
 }
 
 BOOL InitializeWMIHooks() {
-    g_real_CoCreateInstance = (RealCoCreateInstanceType)GetProcAddress(GetModuleHandleW(L"combase.dll"), "CoCreateInstance");
-    if (!g_real_CoCreateInstance) {
-        g_real_CoCreateInstance = (RealCoCreateInstanceType)GetProcAddress(GetModuleHandleW(L"ole32.dll"), "CoCreateInstance");
-    }
+    InitializeBiosSerialWMIModule(); 
 
+    g_real_CoCreateInstance = (RealCoCreateInstanceType)DetourFindFunction("ole32.dll", "CoCreateInstance");
     if (!g_real_CoCreateInstance) {
-        LogMessage("[WMI_HANDLER] CRITICAL: Could not find CoCreateInstance.\\n");
+        LogMessage("[WMI_HANDLER] CRITICAL: Failed to find CoCreateInstance in ole32.dll\n");
         return FALSE;
     }
 
-    if (!AttachHook((void**)&g_real_CoCreateInstance, Hooked_CoCreateInstance_For_Locator)) {
-        // LogMessage is called by AttachHook on failure
-        return FALSE;
-    }
-    
-    // Initialize specific WMI modules
-    if (!InitializeBiosSerialWMIModule()) {
-        LogMessage("[WMI_HANDLER] WARNING: Failed to initialize BiosSerialWMIModule.\\n");
-        // Continue initialization as other parts might be independent or succeed.
+    if (!AttachHook(&(PVOID&)g_real_CoCreateInstance, Hooked_CoCreateInstance_For_Locator)) {
+        LogMessage("[WMI_HANDLER] CRITICAL: Failed to attach hook to CoCreateInstance (for Locator). Not fatal for all WMI, but locator-based init will fail.\n");
     }
 
+    OutputDebugStringW(L"[WMI_HANDLER] WMI hooks initialized (CoCreateInstance for IWbemLocator hooked).\n");
     return TRUE;
 }
 
 void CleanupWMIHooks() {
-    // Cleanup specific WMI modules first
-    CleanupBiosSerialWMIModule();
+    if (g_real_CoCreateInstance) {
+        DetourTransactionBegin();
+        DetourUpdateThread(GetCurrentThread());
+        DetourDetach(&(PVOID&)g_real_CoCreateInstance, Hooked_CoCreateInstance_For_Locator);
+        DetourTransactionCommit();
+        g_real_CoCreateInstance = nullptr; 
+    }
 
-    DetourTransactionBegin();
+    if (g_real_ConnectServer) {
+        DetourTransactionBegin();
+        DetourUpdateThread(GetCurrentThread());
+        DetourDetach(&(PVOID&)g_real_ConnectServer, Hooked_ConnectServer);
+        DetourTransactionCommit();
+        g_real_ConnectServer = nullptr;
+    }
 
-    if (g_real_CreateInstanceEnum) DetourDetach(&(PVOID&)g_real_CreateInstanceEnum, Hooked_CreateInstanceEnum);
-    if (g_real_GetObject) DetourDetach(&(PVOID&)g_real_GetObject, Hooked_GetObject);
-    if (g_real_ExecQuery) DetourDetach(&(PVOID&)g_real_ExecQuery, Hooked_ExecQuery);
-    if (g_real_ConnectServer) DetourDetach(&(PVOID&)g_real_ConnectServer, Hooked_ConnectServer);
-    if (g_real_CoCreateInstance) DetourDetach(&(PVOID&)g_real_CoCreateInstance, Hooked_CoCreateInstance_For_Locator);
+    if (g_real_ExecQuery) { 
+        DetourTransactionBegin();
+        DetourUpdateThread(GetCurrentThread());
+        DetourDetach(&(PVOID&)g_real_ExecQuery, Hooked_ExecQuery);
+        DetourTransactionCommit();
+        g_real_ExecQuery = nullptr;
+    }
 
-    LONG error = DetourTransactionCommit();
-    if (error != NO_ERROR) {
-        LogMessage("[WMI_HANDLER] CRITICAL: Detours cleanup transaction failed: %d\\n", error);
+    if (g_real_GetObject) { 
+        DetourTransactionBegin();
+        DetourUpdateThread(GetCurrentThread());
+        DetourDetach(&(PVOID&)g_real_GetObject, Hooked_GetObject);
+        DetourTransactionCommit();
+        g_real_GetObject = nullptr;
+    }
+
+    if (g_real_CreateInstanceEnum) {
+        DetourTransactionBegin();
+        DetourUpdateThread(GetCurrentThread());
+        DetourDetach(&(PVOID&)g_real_CreateInstanceEnum, Hooked_CreateInstanceEnum);
+        DetourTransactionCommit();
+        g_real_CreateInstanceEnum = nullptr;
     }
     
-    g_real_CreateInstanceEnum = nullptr;
-    g_real_GetObject = nullptr;
-    g_real_ExecQuery = nullptr;
-    g_real_ConnectServer = nullptr;
-    g_real_CoCreateInstance = nullptr;
+    CleanupBiosSerialWMIModule(); 
+    OutputDebugStringW(L"[WMI_HANDLER] WMI hooks cleaned up.\n");
 }

@@ -77,7 +77,7 @@ void SetSpoofedSystemUuid(const char* uuidString) {
     if (uuidString && strlen(uuidString) > 0) {
         RPC_STATUS status = UuidFromStringA(reinterpret_cast<RPC_CSTR>(const_cast<char*>(uuidString)), &g_systemUuid);
         if (status != RPC_S_OK) {
-            OutputDebugStringW(L"SYSTEM_UUID: Invalid UUID string format.");
+            OutputDebugStringW(L"SYSTEM_UUID: CRITICAL - Invalid UUID string format.");
         }
     }
 }
@@ -86,7 +86,7 @@ void ModifySmbiosForSystemUuid(PVOID pFirmwareTableBuffer, DWORD BufferSize) {
     if (!pFirmwareTableBuffer || BufferSize < sizeof(RawSMBIOSDataUuid)) return;
     RawSMBIOSDataUuid* pSmbios = static_cast<RawSMBIOSDataUuid*>(pFirmwareTableBuffer);
     if (pSmbios->Length == 0 || pSmbios->Length > BufferSize - offsetof(RawSMBIOSDataUuid, SMBIOSTableData)) {
-        OutputDebugStringW(L"SYSTEM_UUID: Invalid SMBIOS data length in ModifySmbiosForSystemUuid.");
+        OutputDebugStringW(L"SYSTEM_UUID: CRITICAL - Invalid SMBIOS data length in ModifySmbiosForSystemUuid.");
         return;
     }
     const BYTE* tableData = pSmbios->SMBIOSTableData;
@@ -97,12 +97,11 @@ void ModifySmbiosForSystemUuid(PVOID pFirmwareTableBuffer, DWORD BufferSize) {
         if ( (const BYTE*)&(sysInfo->UUID) + sizeof(GUID) <= pEnd ) {
             sysInfo->UUID = g_systemUuid;
         } else {
-            OutputDebugStringW(L"SYSTEM_UUID: Error: UUID field extends beyond SMBIOS data boundary.");
+            OutputDebugStringW(L"SYSTEM_UUID: CRITICAL - Error: UUID field extends beyond SMBIOS data boundary.");
         }
     } else {
-        OutputDebugStringW(L"SYSTEM_UUID: System Information (Type 1) SMBIOS structure not found or too small for UUID.");
+        OutputDebugStringW(L"SYSTEM_UUID: CRITICAL - System Information (Type 1) SMBIOS structure not found or too small for UUID.");
     }
-    OutputDebugStringW(L"SYSTEM_UUID: ModifySmbiosForSystemUuid called.");
 }
 
 PVOID* GetRealGetSystemFirmwareTableForUuid() {
@@ -113,6 +112,6 @@ void InitializeSystemUuidHooks(PVOID realGetSystemFirmwareTable) {
     if (realGetSystemFirmwareTable) {
         Real_GetSystemFirmwareTable_SystemUuid = reinterpret_cast<UINT(WINAPI*)(DWORD, DWORD, PVOID, DWORD)>(realGetSystemFirmwareTable);
     } else {
-        OutputDebugStringW(L"SYSTEM_UUID: Init with NULL Real_GetSystemFirmwareTable pointer for UUID module!");
+        OutputDebugStringW(L"SYSTEM_UUID: CRITICAL - Init with NULL Real_GetSystemFirmwareTable pointer for UUID module!");
     }
 }

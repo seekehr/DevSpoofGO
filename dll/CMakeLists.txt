@@ -22,6 +22,7 @@ add_library(spoof_dll SHARED
     native/reg/reg_info.cpp
     native/reg/current_version.cpp
     wmi/wmi_handler.cpp
+    wmi/bios_serial_wmi.cpp
 )
 
 

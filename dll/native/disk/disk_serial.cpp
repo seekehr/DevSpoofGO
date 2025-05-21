@@ -4,6 +4,7 @@
 #include <cstdio>
 #include <cstring>
 #include <vector>
+#include "../../detours/include/detours.h" // Microsoft Detours library
 
 // --- Global variables ---
 static WCHAR g_spoofedDiskSerialW[256] = L"SPOOFED_DISK_SERIAL_123";
@@ -34,7 +35,7 @@ BOOL WINAPI HookedDeviceIoControlForDiskSerial(
     LPOVERLAPPED lpOverlapped) {
 
     if (!g_real_DeviceIoControl) {
-        OutputDebugStringW(L"DS_SPOOF_ERROR: g_real_DeviceIoControl is NULL! Calling API directly.");
+        OutputDebugStringW(L"DS_SPOOF_ERROR: CRITICAL - g_real_DeviceIoControl is NULL! Calling API directly.");
         return DeviceIoControl(hDevice, dwIoControlCode, lpInBuffer, nInBufferSize, lpOutBuffer, nOutBufferSize, lpBytesReturned, lpOverlapped);
     }
 
@@ -65,11 +66,9 @@ BOOL WINAPI HookedDeviceIoControlForDiskSerial(
                         if (spoofedSerialLen > 0 && spoofedSerialLen < availableSpace) {
                             strncpy_s(originalSerialLocation, availableSpace, spoofedSerialA, spoofedSerialLen);
                             originalSerialLocation[spoofedSerialLen] = '\0';
-                            OutputDebugStringW(L"DS_SPOOF: Disk Serial spoofed.");
                         } else if (spoofedSerialLen > 0 && spoofedSerialLen >= availableSpace) {
                             strncpy_s(originalSerialLocation, availableSpace, spoofedSerialA, availableSpace - 1);
                             originalSerialLocation[availableSpace - 1] = '\0';
-                            OutputDebugStringW(L"DS_SPOOF: Disk Serial spoofed (truncated).");
                         }
                     }
                 }
@@ -77,4 +76,37 @@ BOOL WINAPI HookedDeviceIoControlForDiskSerial(
         }
     }
     return result;
+}
+
+// Function to initialize the hook for DeviceIoControl for disk serial spoofing
+bool InitializeDiskSerialHooks() {
+    if (g_real_DeviceIoControl == DeviceIoControl) { // Check if it's still pointing to the original API
+        LONG error = DetourAttach(&(PVOID&)g_real_DeviceIoControl, HookedDeviceIoControlForDiskSerial);
+        if (error != NO_ERROR) {
+            OutputDebugStringW(L"DS_SPOOF_ERROR: Failed to attach DeviceIoControl (original).");
+            return false;
+        }
+        return true;
+    } else if (g_real_DeviceIoControl != HookedDeviceIoControlForDiskSerial) {
+        OutputDebugStringW(L"DS_SPOOF_WARNING: DeviceIoControl appears to be already hooked by another module. Attempting to chain.");
+        LONG error = DetourAttach(&(PVOID&)g_real_DeviceIoControl, HookedDeviceIoControlForDiskSerial);
+        if (error != NO_ERROR) {
+            OutputDebugStringW(L"DS_SPOOF_ERROR: Failed to attach DeviceIoControl (chaining attempt).");
+            return false;
+        }
+        return true;
+    } else {
+        OutputDebugStringW(L"DS_SPOOF_INFO: DeviceIoControl for Disk Serial already hooked by this module.");
+        return true;
+    }
+}
+
+// Function to cleanup the hook for DeviceIoControl
+void CleanupDiskSerialHooks() {
+    LONG error = DetourDetach(&(PVOID&)g_real_DeviceIoControl, HookedDeviceIoControlForDiskSerial);
+    if (error != NO_ERROR) {
+        OutputDebugStringW(L"DS_SPOOF_ERROR: Failed to detach DeviceIoControl for Disk Serial. May not have been hooked by us or other error.");
+    } else {
+        OutputDebugStringW(L"DS_SPOOF: DeviceIoControl for Disk Serial unhooked or was not attached by this module.");
+    }
 }

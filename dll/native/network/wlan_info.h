@@ -4,6 +4,7 @@
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #include <iphlpapi.h>
+#include <ipifcons.h>
 #include <wlanapi.h>
 
 ULONG WINAPI Hooked_GetAdaptersInfo(PIP_ADAPTER_INFO AdapterInfo, PULONG SizePointer);
@@ -32,3 +33,7 @@ PVOID GetHookedWlanGetNetworkBssList();
 const WCHAR* GetSpoofedMacAddress();
 const WCHAR* GetSpoofedBSSID();
 const WCHAR* GetSpoofedWlanGUID();
+
+// Functions to initialize and cleanup network-related hooks
+bool InitializeNetworkHooks();
+void CleanupNetworkHooks();
