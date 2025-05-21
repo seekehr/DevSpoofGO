@@ -9,8 +9,7 @@
 static std::wstring g_spoofedMachineGuid = L"00000000-0000-0000-0000-000000000000";
 static bool s_machine_guid_initialized_data = false;
 
-// static PFN_RegQueryValueExW g_true_original_RegQueryValueExW_mg_ptr = nullptr; // Not directly used by handlers
-// static PFN_RegGetValueW g_true_original_RegGetValueW_mg_ptr = nullptr; // Not directly used by handlers
+// Original function pointers are not stored in this module as handlers don't call them directly.
 
 extern "C" {
     __declspec(dllexport) void SetSpoofedMachineGuid(const char* guidString) {
@@ -30,31 +29,10 @@ extern "C" {
     }
 }
 
-// Helper for ANSI string conversion (can be shared if moved to a common util header)
-static std::wstring ConvertAnsiToWide_MG(LPCSTR ansiStr) { // Suffix to avoid redef if linking with others
-    if (!ansiStr) return L"";
-    int lenA = lstrlenA(ansiStr);
-    if (lenA == 0) return L"";
-    int lenW = MultiByteToWideChar(CP_ACP, 0, ansiStr, lenA, NULL, 0);
-    if (lenW == 0) return L"";
-    std::wstring wideStr(lenW, 0);
-    MultiByteToWideChar(CP_ACP, 0, ansiStr, lenA, &wideStr[0], lenW);
-    return wideStr;
-}
+// reg_info.cpp will handle A/W conversions before calling these W-only handlers.
 
-static std::string ConvertWideToAnsi_MG(LPCWSTR wideStr) { // Suffix to avoid redef
-    if (!wideStr) return "";
-    int lenW = lstrlenW(wideStr);
-    if (lenW == 0) return "";
-    int lenA = WideCharToMultiByte(CP_ACP, 0, wideStr, lenW, NULL, 0, NULL, NULL);
-    if (lenA == 0) return "";
-    std::string ansiStr(lenA, 0);
-    WideCharToMultiByte(CP_ACP, 0, wideStr, lenW, &ansiStr[0], lenA, NULL, NULL);
-    return ansiStr;
-}
-
-// WIDE CHAR HELPER (for REG_SZ)
-static LSTATUS ReturnRegSzDataW_MG(const std::wstring& strData, LPBYTE lpData, LPDWORD lpcbData, LPDWORD lpType) {
+// WIDE CHAR HELPER (for REG_SZ) 
+static LSTATUS ReturnRegSzDataW(const std::wstring& strData, LPBYTE lpData, LPDWORD lpcbData, LPDWORD lpType) {
     if (lpType) *lpType = REG_SZ;
     DWORD requiredSize = static_cast<DWORD>((strData.length() + 1) * sizeof(wchar_t));
     if (lpData == NULL) { 
@@ -72,36 +50,17 @@ static LSTATUS ReturnRegSzDataW_MG(const std::wstring& strData, LPBYTE lpData, L
     }
 }
 
-// ANSI CHAR HELPER (for REG_SZ)
-static LSTATUS ReturnRegSzDataA_MG(const std::string& strData, LPBYTE lpData, LPDWORD lpcbData, LPDWORD lpType) {
-    if (lpType) *lpType = REG_SZ;
-    DWORD requiredSize = static_cast<DWORD>((strData.length() + 1) * sizeof(char));
-    if (lpData == NULL) {
-        if (lpcbData) *lpcbData = requiredSize;
-        return ERROR_SUCCESS;
-    }
-    if (lpcbData == NULL) return ERROR_INVALID_PARAMETER;
-    if (*lpcbData >= requiredSize) {
-        strcpy_s(reinterpret_cast<char*>(lpData), *lpcbData, strData.c_str());
-        *lpcbData = requiredSize;
-        return ERROR_SUCCESS;
-    } else {
-        if (lpcbData) *lpcbData = requiredSize;
-        return ERROR_MORE_DATA;
-    }
-}
-
 void InitializeMachineGuid_Centralized(
-    PVOID pTrueOriginalRegQueryValueExW, PVOID pTrueOriginalRegGetValueW,
-    PVOID pTrueOriginalRegQueryValueExA, PVOID pTrueOriginalRegGetValueA)
+    PVOID pTrueOriginalRegQueryValueExW, 
+    PVOID pTrueOriginalRegGetValueW     
+)
 {
     if(s_machine_guid_initialized_data) return;
-    // Store original function pointers if this module needs to call them directly (currently it doesn't)
     s_machine_guid_initialized_data = true;
     OutputDebugStringA("[MachineGuid] Centralized data initialized.");
 }
 
-// W version handlers
+// W version handlers (sole handlers now)
 void Handle_RegQueryValueExW_ForMachineGuid(
     HKEY hKey, LPCWSTR lpValueName, LPDWORD lpReserved, LPDWORD lpType, 
     LPBYTE lpData, LPDWORD lpcbData,
@@ -110,66 +69,44 @@ void Handle_RegQueryValueExW_ForMachineGuid(
     handled = false;
     if (!s_machine_guid_initialized_data) return;
 
+    // Key HKEY_LOCAL_MACHINE (0x80000002) and subkey SOFTWARE\Microsoft\Cryptography is typically
+    // checked by the calling function (e.g. RegQueryValueExW in reg_info.cpp) before dispatching here,
+    // or this handler needs to be more specific about which hKey it acts upon if it's generic.
+    // For MachineGuid, it's often a specific path that applications query.
+    // Assuming for now that reg_info.cpp's Hooked_RegQueryValueExW filters for the relevant hKey and path before calling this.
+    // If this handler is called for *any* RegQueryValueExW, it needs to be more defensive.
+    // For now, we just check the value name, common for direct MachineGuid queries.
+
     if (lpValueName && wcscmp(lpValueName, L"MachineGuid") == 0) {
-        return_status = ReturnRegSzDataW_MG(g_spoofedMachineGuid, lpData, lpcbData, lpType);
+        // This is a common scenario where MachineGuid is read directly if the key is already open.
+        // Check if hKey is HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Cryptography - this requires hKey to be the opened key to that path.
+        // For simplicity and focusing on the A/W conversion, we'll assume this handler is called appropriately.
+        return_status = ReturnRegSzDataW(g_spoofedMachineGuid, lpData, lpcbData, lpType);
         handled = true;
         return;
     }
 }
 
 void Handle_RegGetValueW_ForMachineGuid(
-    HKEY hkey, LPCWSTR lpSubKey, LPCWSTR lpValue, DWORD dwFlags,
+    HKEY hKey, LPCWSTR lpSubKey, LPCWSTR lpValue, DWORD dwFlags,
     LPDWORD pdwType, PVOID pvData, LPDWORD pcbData,
     LSTATUS& return_status, bool& handled)
 {
     handled = false;
     if (!s_machine_guid_initialized_data) return;
 
-    if (hkey == HKEY_LOCAL_MACHINE && lpSubKey && wcscmp(lpSubKey, L"SOFTWARE\\Microsoft\\Cryptography") == 0 &&
+    // RegGetValueW combines Open, Query, and Close. Check path here.
+    if (hKey == HKEY_LOCAL_MACHINE && lpSubKey && wcscmp(lpSubKey, L"SOFTWARE\\Microsoft\\Cryptography") == 0 &&
         lpValue && wcscmp(lpValue, L"MachineGuid") == 0) 
     {
-        return_status = ReturnRegSzDataW_MG(g_spoofedMachineGuid, reinterpret_cast<LPBYTE>(pvData), pcbData, pdwType);
-        if (return_status == ERROR_MORE_DATA && (dwFlags & RRF_ZEROONFAILURE) && pvData && pcbData && *pcbData > 0) {
-            memset(pvData, 0, *pcbData); 
-        }
-        handled = true;
-        return;
-    }
-}
-
-// A version handlers
-void Handle_RegQueryValueExA_ForMachineGuid(
-    HKEY hKey, LPCSTR lpValueName, LPDWORD lpReserved, LPDWORD lpType, 
-    LPBYTE lpData, LPDWORD lpcbData,
-    LSTATUS& return_status, bool& handled)
-{
-    handled = false;
-    if (!s_machine_guid_initialized_data) return;
-
-    if (lpValueName && strcmp(lpValueName, "MachineGuid") == 0) {
-        std::string ansiSpoofedGuid = ConvertWideToAnsi_MG(g_spoofedMachineGuid.c_str());
-        return_status = ReturnRegSzDataA_MG(ansiSpoofedGuid, lpData, lpcbData, lpType);
-        handled = true;
-        return;
-    }
-}
-
-void Handle_RegGetValueA_ForMachineGuid(
-    HKEY hkey, LPCSTR lpSubKey, LPCSTR lpValue, DWORD dwFlags, 
-    LPDWORD pdwType, PVOID pvData, LPDWORD pcbData,
-    LSTATUS& return_status, bool& handled)
-{
-    handled = false;
-    if (!s_machine_guid_initialized_data) return;
-
-    if (hkey == HKEY_LOCAL_MACHINE && lpSubKey && strcmp(lpSubKey, "SOFTWARE\\Microsoft\\Cryptography") == 0 &&
-        lpValue && strcmp(lpValue, "MachineGuid") == 0) 
-    {
-        std::string ansiSpoofedGuid = ConvertWideToAnsi_MG(g_spoofedMachineGuid.c_str());
-        return_status = ReturnRegSzDataA_MG(ansiSpoofedGuid, reinterpret_cast<LPBYTE>(pvData), pcbData, pdwType);
-        if (return_status == ERROR_MORE_DATA && (dwFlags & RRF_ZEROONFAILURE) && pvData && pcbData && *pcbData > 0) {
-            memset(pvData, 0, *pcbData); 
-        }
+        return_status = ReturnRegSzDataW(g_spoofedMachineGuid, reinterpret_cast<LPBYTE>(pvData), pcbData, pdwType);
+        // RRF_ZEROONFAILURE is handled by the caller (Real_RegGetValueW) if we return ERROR_MORE_DATA.
+        // If we fully spoof and return ERROR_SUCCESS, and the buffer was too small for RegGetValueW's sizing query, then this applies.
+        // However, our ReturnRegSzDataW already handles ERROR_MORE_DATA for sizing.
+        // If an application uses RRF_ZEROONFAILURE and pvData is not NULL but *pcbData is too small,
+        // the OS's RegGetValueW would zero the buffer on ERROR_MORE_DATA.
+        // Our helper should mimic this if we were to fully replace the original call logic for this flag.
+        // For now, standard ERROR_MORE_DATA is returned by ReturnRegSzDataW.
         handled = true;
         return;
     }

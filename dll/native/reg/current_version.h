@@ -4,22 +4,17 @@
 #include <string>
 #include <vector>
 
-// Typedefs for original function pointers (W versions)
+// Typedefs for original WIDE function pointers
 typedef LSTATUS (WINAPI *PFN_CV_RegOpenKeyExW)(HKEY, LPCWSTR, DWORD, REGSAM, PHKEY);
-typedef LSTATUS (WINAPI *PFN_CV_RegQueryValueExW)(HKEY, LPCWSTR, LPDWORD, LPDWORD, LPBYTE, LPDWORD);
-typedef LSTATUS (WINAPI *PFN_CV_RegGetValueW)(HKEY, LPCWSTR, LPCWSTR, DWORD, LPDWORD, PVOID, LPDWORD);
-typedef LSTATUS (WINAPI *PFN_CV_RegCloseKey)(HKEY); // Common
+typedef LSTATUS (WINAPI *PFN_CV_RegQueryValueExW)(HKEY, LPCWSTR, LPDWORD, LPDWORD, LPBYTE, LPDWORD); // Not strictly needed if handlers don't call original directly
+typedef LSTATUS (WINAPI *PFN_CV_RegGetValueW)(HKEY, LPCWSTR, LPCWSTR, DWORD, LPDWORD, PVOID, LPDWORD); // Not strictly needed
+typedef LSTATUS (WINAPI *PFN_CV_RegCloseKey)(HKEY); // Common, not strictly needed if handler doesn't call original
 
-// Typedefs for original function pointers (A versions)
-typedef LSTATUS (WINAPI *PFN_CV_RegOpenKeyExA)(HKEY, LPCSTR, DWORD, REGSAM, PHKEY);
-typedef LSTATUS (WINAPI *PFN_CV_RegQueryValueExA)(HKEY, LPCSTR, LPDWORD, LPDWORD, LPBYTE, LPDWORD);
-typedef LSTATUS (WINAPI *PFN_CV_RegGetValueA)(HKEY, LPCSTR, LPCSTR, DWORD, LPDWORD, PVOID, LPDWORD);
-
-// Handler functions for CurrentVersion-related registry operations (W versions)
+// Handler functions for CurrentVersion-related registry operations (W versions ONLY)
 void Handle_RegOpenKeyExW_ForCurrentVersion(
     HKEY hKey, LPCWSTR lpSubKey, DWORD ulOptions, REGSAM samDesired, PHKEY phkResult,
     LSTATUS& status, bool& handled,
-    PFN_CV_RegOpenKeyExW original_RegOpenKeyExW_param
+    PFN_CV_RegOpenKeyExW original_RegOpenKeyExW_passthrough // Actual Real_RegOpenKeyExW from reg_info
 );
 void Handle_RegQueryValueExW_ForCurrentVersion(
     HKEY hKey, LPCWSTR lpValueName, LPDWORD lpReserved, LPDWORD lpType,
@@ -34,34 +29,15 @@ void Handle_RegGetValueW_ForCurrentVersion(
 void Handle_RegCloseKey_ForCurrentVersion(
     HKEY hKey,
     LSTATUS& status, bool& handled
-); // Common
-
-// Handler functions for CurrentVersion-related registry operations (A versions)
-void Handle_RegOpenKeyExA_ForCurrentVersion(
-    HKEY hKey, LPCSTR lpSubKey, DWORD ulOptions, REGSAM samDesired, PHKEY phkResult,
-    LSTATUS& status, bool& handled,
-    PFN_CV_RegOpenKeyExA original_RegOpenKeyExA_param
-);
-void Handle_RegQueryValueExA_ForCurrentVersion(
-    HKEY hKey, LPCSTR lpValueName, LPDWORD lpReserved, LPDWORD lpType,
-    LPBYTE lpData, LPDWORD lpcbData,
-    LSTATUS& status, bool& handled
-);
-void Handle_RegGetValueA_ForCurrentVersion(
-    HKEY hkey, LPCSTR lpSubKey, LPCSTR lpValue, DWORD dwFlags,
-    LPDWORD pdwType, PVOID pvData, LPDWORD pcbData,
-    LSTATUS& status, bool& handled
 );
 
-// Initializes CurrentVersion spoofing data and stores true original function pointers.
+// Initializes CurrentVersion spoofing data.
+// Now only takes PVOID for WIDE original functions.
 void InitializeCurrentVersionSpoofing_Centralized(
     PVOID pTrueOriginalRegOpenKeyExW,
-    PVOID pTrueOriginalRegQueryValueExW,
-    PVOID pTrueOriginalRegGetValueW,
-    PVOID pTrueOriginalRegCloseKey, // Common
-    PVOID pTrueOriginalRegOpenKeyExA,
-    PVOID pTrueOriginalRegQueryValueExA,
-    PVOID pTrueOriginalRegGetValueA
+    PVOID pTrueOriginalRegQueryValueExW, // Kept for signature consistency, not stored/used by CV handlers
+    PVOID pTrueOriginalRegGetValueW,     // Kept for signature consistency, not stored/used by CV handlers
+    PVOID pTrueOriginalRegCloseKey       // Kept for signature consistency, not stored/used by CV handlers
 );
 
 // Exported function to optionally set a specific Product ID (example, not strictly required by prompt for now)

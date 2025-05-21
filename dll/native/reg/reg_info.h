@@ -5,16 +5,10 @@
 // These will store the true original function pointers obtained by reg_info
 // They are primarily for Detours to have a place to store the trampoline.
 // Individual modules will also get these true originals via their init functions.
-extern LSTATUS (WINAPI *g_true_original_RegQueryValueExW)(HKEY, LPCWSTR, LPDWORD, LPDWORD, LPBYTE, LPDWORD);
-extern LSTATUS (WINAPI *g_true_original_RegGetValueW)(HKEY, LPCWSTR, LPCWSTR, DWORD, LPDWORD, PVOID, LPDWORD);
-extern LSTATUS (WINAPI *g_true_original_RegOpenKeyExW)(HKEY, LPCWSTR, DWORD, REGSAM, PHKEY);
-extern LSTATUS (WINAPI *g_true_original_RegEnumKeyExW)(HKEY, DWORD, LPWSTR, LPDWORD, LPDWORD, LPWSTR, LPDWORD, PFILETIME);
-extern LSTATUS (WINAPI *g_true_original_RegCloseKey)(HKEY);
-
-extern LSTATUS (WINAPI *g_true_original_RegQueryValueExA)(HKEY, LPCSTR, LPDWORD, LPDWORD, LPBYTE, LPDWORD);
-extern LSTATUS (WINAPI *g_true_original_RegGetValueA)(HKEY, LPCSTR, LPCSTR, DWORD, LPDWORD, PVOID, LPDWORD);
-extern LSTATUS (WINAPI *g_true_original_RegOpenKeyExA)(HKEY, LPCSTR, DWORD, REGSAM, PHKEY);
-extern LSTATUS (WINAPI *g_true_original_RegEnumKeyExA)(HKEY, DWORD, LPSTR, LPDWORD, LPDWORD, LPSTR, LPDWORD, PFILETIME);
+// extern LSTATUS (WINAPI *g_true_original_RegQueryValueExA)(HKEY, LPCSTR, LPDWORD, LPDWORD, LPBYTE, LPDWORD); // Keep A hooks, remove A originals
+// extern LSTATUS (WINAPI *g_true_original_RegGetValueA)(HKEY, LPCSTR, LPCSTR, DWORD, LPDWORD, PVOID, LPDWORD);
+// extern LSTATUS (WINAPI *g_true_original_RegOpenKeyExA)(HKEY, LPCSTR, DWORD, REGSAM, PHKEY);
+// extern LSTATUS (WINAPI *g_true_original_RegEnumKeyExA)(HKEY, DWORD, LPSTR, LPDWORD, LPDWORD, LPSTR, LPDWORD, PFILETIME);
 
 LSTATUS WINAPI Hooked_RegOpenKeyExW(HKEY hKey, LPCWSTR lpSubKey, DWORD ulOptions, REGSAM samDesired, PHKEY phkResult);
 LSTATUS WINAPI Hooked_RegEnumKeyExW(HKEY hKey, DWORD dwIndex, LPWSTR lpName, LPDWORD lpcchName, LPDWORD lpReserved, LPWSTR lpClass, LPDWORD lpcchClass, PFILETIME lpftLastWriteTime);
