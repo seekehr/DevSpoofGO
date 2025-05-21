@@ -27,6 +27,7 @@ extern RealConnectServerType g_real_ConnectServer;
 // Global pointers for the original CreateInstanceEnum and IEnumWbemClassObject::Next functions
 extern RealCreateInstanceEnumType g_real_CreateInstanceEnum;
 extern RealGetObjectType g_real_GetObject;
+extern RealExecQueryType g_real_ExecQuery;
 
 // Declaration for the logging function
 void LogMessage(const char* format, ...);
