@@ -7,7 +7,6 @@
 #include <cstdio>
 
 static UINT (WINAPI *Real_GetSystemFirmwareTable_Original)(DWORD, DWORD, PVOID, DWORD) = nullptr;
-// Removed static pointers for Real_RegQueryValueExW and Real_RegGetValueW
 
 UINT WINAPI Hooked_GetSystemFirmwareTable_Central(DWORD FirmwareTableProviderSignature,
                                                 DWORD FirmwareTableID,
