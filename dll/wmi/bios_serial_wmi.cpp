@@ -1,34 +1,18 @@
 #include "bios_serial_wmi.h"
-#include "../wmi_handler.h" 
 #include <atlbase.h> 
 #include <atlconv.h> 
 #include <comdef.h>
 #include <string>     
-#include "wmi_classes.h"
+#include "wmi_utils.h"
 #include <ocidl.h> 
 #include <wbemidl.h> 
-
-// Typedefs to ensure linter recognizes types for extern declarations below
-typedef HRESULT (STDMETHODCALLTYPE *RealExecQueryType)(
-    IWbemServices*, const BSTR, const BSTR, long, IWbemContext*, IEnumWbemClassObject**);
-typedef HRESULT (STDMETHODCALLTYPE *RealGetObjectType)(
-    IWbemServices*, const BSTR, long, IWbemContext*, IWbemClassObject**, IWbemCallResult**);
-typedef HRESULT (STDMETHODCALLTYPE *RealCreateInstanceEnumType)(
-    IWbemServices*, const BSTR, long, IWbemContext*, IEnumWbemClassObject**);
-
-// Global pointers to hold the addresses of the original functions (defined in wmi_handler.cpp)
-extern RealExecQueryType g_real_ExecQuery;
-extern RealGetObjectType g_real_GetObject;
-extern RealCreateInstanceEnumType g_real_CreateInstanceEnum;
-
-// extern IWbemServices* g_pOriginalWbemServices; // REMOVED THIS
 
 const wchar_t* BIOS_SPOOFED_SERIAL_NUMBER = L"F122RCX0031FBNC";
 
 class BiosSerialWbemObject : public MockWbemObject {
 private:
     std::wstring m_serialNumber;
-    IWbemClassObject* m_pRealObject; // Pointer to the real WMI object
+    IWbemClassObject* m_pRealObject; 
 
 public:
     BiosSerialWbemObject(const wchar_t* serial, const wchar_t* className = L"Win32_BIOS", IWbemClassObject* pReal = nullptr)
@@ -48,7 +32,6 @@ public:
     const std::wstring& GetSerialNumberWstr() const { return m_serialNumber; }
     IWbemClassObject* GetRealObject() const { return m_pRealObject; }
 
-    // Implement pure virtual methods from MockWbemObject
     STDMETHODIMP Get(LPCWSTR wszName, long lFlags, VARIANT *pVal, CIMTYPE *pType, long *plFlavor) override {
         if (!wszName) return E_INVALIDARG;
         if (_wcsicmp(wszName, L"SerialNumber") == 0) {
@@ -104,14 +87,12 @@ public:
 
 class BiosSerialEnumWbemObject : public MockEnumWbemObject {
 public:
-    // Constructor takes BiosSerialWbemObject which might be a wrapper or standalone
     BiosSerialEnumWbemObject(BiosSerialWbemObject* biosObject, const wchar_t* className = L"Win32_BIOS")
         : MockEnumWbemObject(biosObject, className) { 
         if (!m_mockObject) { 
         }
     }
      ~BiosSerialEnumWbemObject() {
-        // Base destructor handles release of m_mockObject
     }
 
     STDMETHODIMP Clone(IEnumWbemClassObject **ppEnum) override {
@@ -137,7 +118,6 @@ public:
     }
 };
 
-// Helper query check for BIOS Serial (kept for simple checks, but logic in handlers is more nuanced)
 inline bool IsBiosSerialQuery(const BSTR strQuery) {
     if (!strQuery) return false;
     bool isSerialQuery = (wcsstr(strQuery, L"SerialNumber") != nullptr);
@@ -145,7 +125,6 @@ inline bool IsBiosSerialQuery(const BSTR strQuery) {
     return isBIOSQuery && isSerialQuery;
 }
 
-// Helper path check for BIOS
 inline bool IsBiosPath(const BSTR strPath) {
     if (!strPath) return false;
     bool isMatch = (wcsstr(strPath, L"Win32_BIOS") != nullptr);
@@ -219,7 +198,7 @@ HRESULT Handle_GetObject_BiosSerial(IWbemServices* pProxyServices, const BSTR st
 
     if (FAILED(hr) || !pRealBiosObject) {
         if (pRealBiosObject) pRealBiosObject->Release();
-        return SUCCEEDED(hr) ? S_OK : hr; // Return original error or S_OK if real call succeeded but found nothing
+        return SUCCEEDED(hr) ? S_OK : hr; 
     }
 
     *ppObject = new BiosSerialWbemObject(BIOS_SPOOFED_SERIAL_NUMBER, L"Win32_BIOS", pRealBiosObject);
@@ -240,7 +219,6 @@ HRESULT Handle_CreateInstanceEnum_BiosSerial(IWbemServices* pProxyServices, cons
     }
 
     if (!g_real_CreateInstanceEnum) {
-        // Fallback: Create a minimal enumerator with one object that only has the spoofed serial.
         BiosSerialWbemObject* serialOnlyObject = new BiosSerialWbemObject(BIOS_SPOOFED_SERIAL_NUMBER);
         if (!serialOnlyObject) { return E_OUTOFMEMORY; }
         *ppEnum = new BiosSerialEnumWbemObject(serialOnlyObject);
@@ -258,7 +236,6 @@ HRESULT Handle_CreateInstanceEnum_BiosSerial(IWbemServices* pProxyServices, cons
         return SUCCEEDED(hr) ? S_OK : hr; 
     }
 
-    // Similar to ExecQuery, we need to get the object from the enumerator to wrap it.
     IWbemClassObject* pRealBiosObjectRaw = nullptr;
     ULONG uReturned = 0;
     hr = pRealEnum->Next(WBEM_INFINITE, 1, &pRealBiosObjectRaw, &uReturned);
@@ -266,7 +243,7 @@ HRESULT Handle_CreateInstanceEnum_BiosSerial(IWbemServices* pProxyServices, cons
 
     if (FAILED(hr) || uReturned == 0 || !pRealBiosObjectRaw) {
         if (pRealBiosObjectRaw) pRealBiosObjectRaw->Release();
-        *ppEnum = new BiosSerialEnumWbemObject(nullptr, L"Win32_BIOS"); // Create an empty enumerator
+        *ppEnum = new BiosSerialEnumWbemObject(nullptr, L"Win32_BIOS"); 
         if (!*ppEnum) { return E_OUTOFMEMORY; }
         handled = true;
         return S_OK;

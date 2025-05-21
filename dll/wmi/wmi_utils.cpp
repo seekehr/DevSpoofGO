@@ -2,7 +2,7 @@
 #include <objbase.h>     // For CoInitialize, CoCreateInstance, and other COM basics
 #include <initguid.h>    // For DEFINE_GUID to actually define GUIDs
 
-#include "wmi_classes.h" // Our class declarations
+#include "wmi_utils.h" // Our class declarations
 
 // --- MockClientSecurity Implementation ---
 MockClientSecurity::MockClientSecurity() : m_cRef(1) {}

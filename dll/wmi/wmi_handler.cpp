@@ -1,5 +1,6 @@
 #include "wmi_handler.h"
-#include "bios_serial_wmi.h" // Include the new module
+#include "wmi_utils.h" 
+#include "bios_serial_wmi.h"
 #include <windows.h>
 #include <atlbase.h> 
 #include <atlconv.h> 
@@ -9,15 +10,11 @@
 #include "../detours/include/detours.h" 
 
 #ifndef IID_IConnectionPointContainer
-// {B196B284-BAB4-101A-B69C-00AA00341F07}
 static const IID IID_IConnectionPointContainer = {0xB196B284, 0xBAB4, 0x101A, {0xB6, 0x9C, 0x00, 0xAA, 0x00, 0x34, 0x1F, 0x07}};
 #endif
 
-// Original LogMessage (if needed by any other part of the DLL, otherwise can be removed if no logs remain)
-// For now, keeping it minimal as it might be used by other modules not visible here.
-// If it's ONLY for the WMI handler and bios_serial_wmi, and we are removing all logs from them, this can go.
 void LogMessage(const char* format, ...) {
-    char buffer[256]; // Reduced buffer size
+    char buffer[256]; 
     va_list args;
     va_start(args, format);
     vsprintf_s(buffer, sizeof(buffer), format, args);
@@ -25,31 +22,17 @@ void LogMessage(const char* format, ...) {
     OutputDebugStringA(buffer);
 }
 
-// Trampoline for the original ExecQuery function
 RealExecQueryType g_real_ExecQuery = nullptr;
-// Trampoline for the original CoCreateInstance function
 RealCoCreateInstanceType g_real_CoCreateInstance = nullptr;
-// Trampoline for the original ConnectServer function
 RealConnectServerType g_real_ConnectServer = nullptr;
 
-// Add to top of file with other global definitions
-typedef HRESULT (STDMETHODCALLTYPE* RealCreateInstanceEnumType)(
-    IWbemServices*, const BSTR, long, IWbemContext*, IEnumWbemClassObject**);
 RealCreateInstanceEnumType g_real_CreateInstanceEnum = nullptr;
-
-// Add GetObject type definition and global pointer
-typedef HRESULT (STDMETHODCALLTYPE* RealGetObjectType)(
-    IWbemServices*, const BSTR, long, IWbemContext*, IWbemClassObject**, IWbemCallResult**);
 RealGetObjectType g_real_GetObject = nullptr;
 
-// Add a thread-local recursion guard
 static thread_local bool g_isInConnectServer = false;
-
-// Add a thread-local flag for Go runtime safety
 static thread_local bool g_inGoOleCall = false;
 
-// Helper function to attach a hook using Detours
-bool AttachHook(void** originalFunc, void* hookFunc) { // Removed funcName
+bool AttachHook(void** originalFunc, void* hookFunc) { 
     DetourTransactionBegin();
     DetourUpdateThread(GetCurrentThread());
     LONG error = DetourAttach(originalFunc, hookFunc); 
@@ -66,7 +49,6 @@ bool AttachHook(void** originalFunc, void* hookFunc) { // Removed funcName
     return true;
 }
 
-// Hook implementations
 HRESULT STDMETHODCALLTYPE Hooked_ExecQuery(
     IWbemServices *pThis, const BSTR strQueryLanguage, const BSTR strQuery,
     long lFlags, IWbemContext *pCtx, IEnumWbemClassObject **ppEnum)
@@ -149,25 +131,23 @@ HRESULT STDMETHODCALLTYPE Hooked_ConnectServer(
         PVOID* vtable = *(PVOID**)pWmiService;
 
         if (vtable) {
-            // Hook methods if not already hooked globally. AttachHook handles its own transaction.
-            // No need for an outer transaction here as AttachHook manages its own.
 
             if (!g_real_ExecQuery) {
-                RealExecQueryType originalExecQuery = (RealExecQueryType)vtable[20]; // IEnumWbemClassObject Next(long, ULONG, IWbemClassObject **, ULONG *); Index is 20 for ExecQuery
+                RealExecQueryType originalExecQuery = (RealExecQueryType)vtable[20]; 
                 if (AttachHook(&(PVOID&)originalExecQuery, Hooked_ExecQuery)) {
                     g_real_ExecQuery = originalExecQuery;
                 }
             }
 
             if (!g_real_GetObject) {
-                RealGetObjectType originalGetObject = (RealGetObjectType)vtable[6]; // GetObject index from typical vtable
+                RealGetObjectType originalGetObject = (RealGetObjectType)vtable[6]; 
                 if (AttachHook(&(PVOID&)originalGetObject, Hooked_GetObject)) {
                     g_real_GetObject = originalGetObject;
                 }
             }
 
             if (!g_real_CreateInstanceEnum) {
-                RealCreateInstanceEnumType originalCreateInstanceEnum = (RealCreateInstanceEnumType)vtable[18]; // Corrected vtable index from 14 to 18
+                RealCreateInstanceEnumType originalCreateInstanceEnum = (RealCreateInstanceEnumType)vtable[18]; 
                 if (AttachHook(&(PVOID&)originalCreateInstanceEnum, Hooked_CreateInstanceEnum)) {
                     g_real_CreateInstanceEnum = originalCreateInstanceEnum;
                 }
