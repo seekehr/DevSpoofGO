@@ -88,16 +88,13 @@
 - InitializeRegistryHooksAndHandlers
 - RemoveRegistryHooksAndHandlers
 
-**Core registry functions are hooked to enable spoofing for specific registry paths/values by other modules.**
+**Core registry functions are hooked to enable spoofing for specific registry paths/values by other modules. Reg_info allows the other registry handlers to check if they can handle the call, and if so (e.g if MachineGuid is being queried), return the spoofed value. It also serves as a way to convert ANSI calls (e.g RegQueryValueExA) into W to reduce boilerplate code.**
 
 ### `native/reg/current_version`
 - Handle_RegOpenKeyExW_ForCurrentVersion
 - Handle_RegQueryValueExW_ForCurrentVersion
 - Handle_RegGetValueW_ForCurrentVersion
 - Handle_RegCloseKey_ForCurrentVersion
-- Handle_RegOpenKeyExA_ForCurrentVersion
-- Handle_RegQueryValueExA_ForCurrentVersion
-- Handle_RegGetValueA_ForCurrentVersion
 - InitializeCurrentVersionSpoofing_Centralized
 
 **OS CurrentVersion registry values (like ProductId) are spoofed.**
@@ -105,8 +102,6 @@
 ### `native/reg/machine_guid`
 - Handle_RegQueryValueExW_ForMachineGuid
 - Handle_RegGetValueW_ForMachineGuid
-- Handle_RegQueryValueExA_ForMachineGuid
-- Handle_RegGetValueA_ForMachineGuid
 - InitializeMachineGuid_Centralized
 
 **MachineGuid (registry) is spoofed.**
@@ -116,9 +111,6 @@
 - Handle_RegEnumKeyExW_ForCertificates
 - Handle_RegQueryValueExW_ForCertificates
 - Handle_RegCloseKey_ForCertificates
-- Handle_RegOpenKeyExA_ForCertificates
-- Handle_RegEnumKeyExA_ForCertificates
-- Handle_RegQueryValueExA_ForCertificates
 - InitializeCertificateSpoofing_Centralized
 
 **Registry-based certificate information is spoofed (Microsoft\Windows NT\CurrentVersion).**
