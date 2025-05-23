@@ -9,7 +9,7 @@ This project works by injecting a custom DLL into the target process, by using M
 
 All configuration, like custom information for what computer name or bios serial, etc., is passed in at runtime from the injector, written in Go. It uses `VirtualAllocEx`, `WriteProcessMemory`, `CreateRemoteThread`, etc to load the DLL and call its setup functions directly in the target process.
 
-As such, the app believes it's getting real system info, but it's actually getting the values we've injected. No file edits, no system changes; just an in-memory override. The project supports: **common native winapi functions (such as GetSystemFirmwareTable), commonly used registry values (such as MachineGuid and the system certificates) and commonly used WMI values (such as bios serial or processor id).**
+As such, the app believes it's getting real system info, but it's actually getting the values we've injected. No file edits, no system changes; just an in-memory override. The project supports: **common native winapi functions (such as GetSystemFirmwareTable), commonly used registry values (such as MachineGuid and the system certificates) and commonly used WMI values (such as bios serial or processor id).** Check out [the DLL markdown file](https://github.com/seekehr/DevSpoofGO/blob/main/dll/dll_docs.md) for more information.
 
 ## C++?
 
