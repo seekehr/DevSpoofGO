@@ -23,4 +23,5 @@ I wanted to get more familiar with Golang and the project sounded fun (initially
 
 # TODO:
 - [ ] Clean up debugging calls (im too tired of this project 😭🙏🏿)
-- [ ] Remove dependency on the entire info/ folder; originally the project was made with different intent so the code there still persists, but now it can be removed in favor of DevSpoofGOTest. 
+- [ ] Remove dependency on the entire info/ folder; originally the project was made with different intent so the code there still persists, but now it can be removed in favor of DevSpoofGOTest.
+- [ ] CLI commands are pretty useless atm
