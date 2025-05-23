@@ -1,4 +1,4 @@
-#include "bios_serial_wmi.h"
+#include "wmi_bios_serial.h"
 #include <atlbase.h> 
 #include <atlconv.h> 
 #include <comdef.h>

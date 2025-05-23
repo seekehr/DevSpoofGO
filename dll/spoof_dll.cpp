@@ -9,7 +9,7 @@
 #include "native/disk/vol_info.h"
 #include "native/os/os_info.h"  
 #include "native/hardware/hardware_info.h"      
-#include "native/reg/reg_info.h"
+#include "reg/reg_info.h"
 #include "native/network/wlan_info.h" 
 #include "native/disk/disk_serial.h" 
 #include "wmi/wmi_handler.h" 

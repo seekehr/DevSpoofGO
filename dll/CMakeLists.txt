@@ -17,13 +17,15 @@ add_library(spoof_dll SHARED
     native/hardware/processor_id.cpp
     native/hardware/system_uuid.cpp
     native/disk/disk_serial.cpp
-    native/reg/certificates_info.cpp
-    native/reg/machine_guid.cpp
-    native/reg/reg_info.cpp
-    native/reg/current_version.cpp
+    reg/certificates_info.cpp
+    reg/machine_guid.cpp
+    reg/reg_info.cpp
+    reg/current_version.cpp
     wmi/wmi_handler.cpp
     wmi/wmi_utils.cpp
-    wmi/bios_serial_wmi.cpp
+    wmi/wmi_bios_serial.cpp
+    wmi/wmi_processor.cpp
+    wmi/wmi_physical_memory.cpp
 )
 
 

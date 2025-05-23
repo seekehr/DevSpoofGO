@@ -40,7 +40,7 @@ func main() {
 		logger.Success("DLL loaded successfully")
 	}
 
-	cli.Start(dll, newInfo, true) // removing later ;p
+	cli.Start(dll, newInfo, false) // removing later ;p
 }
 
 func isAdmin() bool {

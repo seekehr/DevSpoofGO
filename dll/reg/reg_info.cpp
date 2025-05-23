@@ -7,13 +7,11 @@
 #include <vector> // Required for std::vector
 #include <string> // Required for std::wstring
 
-// Define the global true original function pointers (declared extern in reg_info.h)
 LSTATUS (WINAPI *g_true_original_RegOpenKeyExW)(HKEY, LPCWSTR, DWORD, REGSAM, PHKEY) = nullptr;
 LSTATUS (WINAPI *g_true_original_RegEnumKeyExW)(HKEY, DWORD, LPWSTR, LPDWORD, LPDWORD, LPWSTR, LPDWORD, PFILETIME) = nullptr;
 LSTATUS (WINAPI *g_true_original_RegQueryValueExW)(HKEY, LPCWSTR, LPDWORD, LPDWORD, LPBYTE, LPDWORD) = nullptr;
 LSTATUS (WINAPI *g_true_original_RegGetValueW)(HKEY, LPCWSTR, LPCWSTR, DWORD, LPDWORD, PVOID, LPDWORD) = nullptr;
 LSTATUS (WINAPI *g_true_original_RegCloseKey)(HKEY) = nullptr;
-// Note: A versions are not needed here as they are no longer true originals.
 
 // These static pointers are used to store the result of GetProcAddress before assigning to g_true_original_...
 // and are also the functions that the Hooked_Reg...A implementations will ultimately call (via g_true_original_... after detouring).
@@ -371,9 +369,6 @@ LSTATUS WINAPI Hooked_RegQueryValueExA(
         return status;
     }
 
-    // lpData is not NULL, client wants to read data.
-    // What if type is not string? Then byte counts are same.
-    // What if type *is* string? We need conversion.
 
     // First call W to get data into a WIDE buffer.
     // Initial guess for W buffer size: cbDataA_provided (bytes for A) can hold at most cbDataA_provided WCHARs.

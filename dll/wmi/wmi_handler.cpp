@@ -1,6 +1,8 @@
 #include "wmi_handler.h"
 #include "wmi_utils.h" 
-#include "bios_serial_wmi.h"
+#include "wmi_bios_serial.h"
+#include "wmi_processor.h"
+#include "wmi_physical_memory.h"
 #include <windows.h>
 #include <atlbase.h> 
 #include <atlconv.h> 
@@ -57,8 +59,21 @@ HRESULT STDMETHODCALLTYPE Hooked_ExecQuery(
     *ppEnum = nullptr;
 
     bool handled = false;
-    HRESULT hr_handler = Handle_ExecQuery_BiosSerial(pThis, strQueryLanguage, strQuery, lFlags, pCtx, ppEnum, handled);
     
+    // Try to handle BIOS SerialNumber queries
+    HRESULT hr_handler = Handle_ExecQuery_BiosSerial(pThis, strQueryLanguage, strQuery, lFlags, pCtx, ppEnum, handled);
+    if (handled) {
+        return hr_handler;
+    }
+    
+    // Try to handle Processor SerialNumber and ProcessorId queries
+    hr_handler = Handle_ExecQuery_Processor(pThis, strQueryLanguage, strQuery, lFlags, pCtx, ppEnum, handled);
+    if (handled) {
+        return hr_handler;
+    }
+    
+    // Try to handle PhysicalMemory SerialNumber and PartNumber queries
+    hr_handler = Handle_ExecQuery_PhysicalMemory(pThis, strQueryLanguage, strQuery, lFlags, pCtx, ppEnum, handled);
     if (handled) {
         return hr_handler;
     }
@@ -76,8 +91,21 @@ HRESULT STDMETHODCALLTYPE Hooked_GetObject(
     if (ppCallResult) *ppCallResult = nullptr;
 
     bool handled = false;
+    
+    // Try to handle BIOS SerialNumber queries
     HRESULT hr_handler = Handle_GetObject_BiosSerial(pThis, strObjectPath, lFlags, pCtx, ppObject, ppCallResult, handled);
-
+    if (handled) {
+        return hr_handler;
+    }
+    
+    // Try to handle Processor SerialNumber and ProcessorId queries
+    hr_handler = Handle_GetObject_Processor(pThis, strObjectPath, lFlags, pCtx, ppObject, ppCallResult, handled);
+    if (handled) {
+        return hr_handler;
+    }
+    
+    // Try to handle PhysicalMemory SerialNumber and PartNumber queries
+    hr_handler = Handle_GetObject_PhysicalMemory(pThis, strObjectPath, lFlags, pCtx, ppObject, ppCallResult, handled);
     if (handled) {
         return hr_handler;
     }
@@ -94,10 +122,23 @@ HRESULT STDMETHODCALLTYPE Hooked_CreateInstanceEnum(
     *ppEnum = nullptr;
 
     bool handled = false;
+    
+    // Try to handle BIOS SerialNumber queries
     HRESULT hr_handler = Handle_CreateInstanceEnum_BiosSerial(pThis, strFilter, lFlags, pCtx, ppEnum, handled);
-
     if (handled) {
         return hr_handler; 
+    }
+    
+    // Try to handle Processor SerialNumber and ProcessorId queries
+    hr_handler = Handle_CreateInstanceEnum_Processor(pThis, strFilter, lFlags, pCtx, ppEnum, handled);
+    if (handled) {
+        return hr_handler;
+    }
+    
+    // Try to handle PhysicalMemory SerialNumber and PartNumber queries
+    hr_handler = Handle_CreateInstanceEnum_PhysicalMemory(pThis, strFilter, lFlags, pCtx, ppEnum, handled);
+    if (handled) {
+        return hr_handler;
     }
     
     if (!g_real_CreateInstanceEnum) return E_FAIL;
