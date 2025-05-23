@@ -16,5 +16,4 @@ Within the `dll/` folder only. I'd create a separate repo for it but I don't wan
 `cmake --build .`
 
 # TODO:
-- [ ] Intercept WMI calls too
-- [ ] Intercept ALL registry calls (like machine_guid) is doing 
+- [ ] Clean up debugging calls (im too tired of this project 😭🙏🏿)
