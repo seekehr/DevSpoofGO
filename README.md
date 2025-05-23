@@ -1,7 +1,7 @@
 # DevSpoofGO (x64)
 A project that injects your desired application with the spoofed credentials, made using C++ (dll) and GoLang (injector).
 
-**LOC:** 7526 (5900 for main project + 1626 for DevSpoofGOTest). Note that LOC does NOT mean better code, or is a measure of how good the project is; I simply want to feel better about giving myself carpel tunnel. Simplicity is key.
+**LOC:** 7526 (5900 for main project + 1626 for DevSpoofGOTest). Note that more LOC do NOT mean better code, and is not a measure of how good the project is; I simply want to feel better about giving myself carpel tunnel. Simplicity is key.
 
 Sister repo (for testing): https://github.com/seekehr/DevSpoofGOTest
 ## How It Works
@@ -13,7 +13,7 @@ As such, the app believes it's getting real system info, but it's actually getti
 
 ## C++?
 
-Within the `dll/` folder only. I'd create a separate repo for it but I don't want to repo spam my poor git profile D;, plus it's more convenient to work like this. A pre-generated spoof_dll.dll exists but you can build it using CMake:
+For the `dll/` only. You can build it by navigating to the `dll/build/` folder, and running:
 
 `cmake --build .`
 
