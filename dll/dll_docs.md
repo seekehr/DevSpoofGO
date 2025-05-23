@@ -137,6 +137,14 @@
 
 **Handles WMI calls (like `ExecQuery`) and redirects them to the appropriate handler (e.g `bios_serial_wmi`).**
 
+### `wmi/wmi_utils`
+- Implements `MockClientSecurity` (custom `IClientSecurity`).
+- Implements `MockConnectionPointContainer` (custom `IConnectionPointContainer`).
+- `MockWbemObject` (base class for custom `IWbemClassObject` implementations, used to create spoofed WMI objects).
+- `MockEnumWbemObject` (base class for custom `IEnumWbemClassObject` implementations, used to enumerate spoofed WMI objects).
+
+**Provides utility classes and type definitions for WMI spoofing, and most importantly, base classes for mock WMI objects and enumerators to reduce boilerplate/duplicate code (which is still an issue TBF).**
+
 ### `wmi/bios_serial_wmi`
 - InitializeBiosSerialWMIModule
 - CleanupBiosSerialWMIModule
@@ -145,3 +153,21 @@
 - Handle_CreateInstanceEnum_BiosSerial
 
 **BIOS serial is spoofed through WMI.**
+
+### `wmi/wmi_physical_memory`
+- InitializePhysicalMemoryWMIModule
+- CleanupPhysicalMemoryWMIModule
+- Handle_ExecQuery_PhysicalMemory
+- Handle_GetObject_PhysicalMemory
+- Handle_CreateInstanceEnum_PhysicalMemory
+
+**Physical memory SerialNumber and PartNumber are spoofed through WMI (Win32_PhysicalMemory).**
+
+### `wmi/wmi_processor`
+- InitializeProcessorWMIModule
+- CleanupProcessorWMIModule
+- Handle_ExecQuery_Processor
+- Handle_GetObject_Processor
+- Handle_CreateInstanceEnum_Processor
+
+**Processor SerialNumber and ProcessorId are spoofed through WMI (Win32_Processor).**
